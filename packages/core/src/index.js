@@ -7,6 +7,12 @@ export {
   DEFAULT_CREDENTIALS_FILE,
 } from "./credentials.js";
 export { redact, fingerprint, maskPhone } from "./redact.js";
+export {
+  onboardingGuide,
+  onboardingStatus,
+  completeOnboarding,
+  assertOnboardingComplete,
+} from "./onboarding.js";
 export { ENDPOINTS, ENDPOINT_BY_ID, classifyRequest } from "./endpoints.js";
 export {
   decide,

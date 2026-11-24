@@ -68,10 +68,12 @@ default_tools_approval_mode = "prompt"
 
 > The npm packages are not published yet. Until they are, replace the `npx` command with `node <repo>/packages/mcp/src/index.js` (or `npm link`). See [`docs/PUBLISHING.md`](docs/PUBLISHING.md).
 
-## First run
+## First run — owner checklist
+
+The plugin prompts through these steps and **blocks live tools until they are finished**. A human can also run `npm run onboarding` from a checkout for the same checklist.
 
 1. Create a Twilio trial account at <https://www.twilio.com/try-twilio>.
-2. Get a trial number and verify your own phone number in the Console.
+2. Get a trial number and verify your own recipient number in the Console.
 3. Set credentials in your shell (never in chat or a repo file):
 
    ```bash
@@ -82,9 +84,13 @@ default_tools_approval_mode = "prompt"
 
    An API key pair is also supported: `TWILIO_API_KEY` + `TWILIO_API_SECRET`.
 
-4. Ask the agent to run `twilio_status`, then `twilio_list_phone_numbers`.
-5. Run `twilio_send_call` with `to` and `message` to place a one-way call. The agent speaks your message with Twilio text-to-speech; no hosting or webhook is required.
-6. Run `twilio_get_call` with the returned SID to confirm status, duration, and price.
+4. Ask the agent to run `twilio_onboarding_guide` and `twilio_onboarding_status`. It will show exactly which steps are missing.
+5. After the owner confirms the steps, run `twilio_onboarding_complete` with `verifiedRecipient`, `acknowledgeTrialLimits: true`, `acknowledgeCosts: true`, and `confirm: true`. Only the last four digits of the verified number are stored.
+6. Run `twilio_status` and `twilio_list_phone_numbers`.
+7. Run `twilio_send_call` with `to` and `message` to place a one-way call. The agent speaks your message with Twilio text-to-speech; no hosting or webhook is required.
+8. Run `twilio_get_call` with the returned SID to confirm status, duration, and price.
+
+`twilio_send_call`, `twilio_send_sms`, `twilio_purchase_number`, and `twilio_configure_number` return an actionable error if this checklist is incomplete.
 
 ## Safety model
 
@@ -92,7 +98,7 @@ default_tools_approval_mode = "prompt"
 | --- | --- | --- |
 | `read` | `twilio_list_calls`, `twilio_get_call`, `twilio_list_phone_numbers`, `twilio_get_usage` | Runs without an extra prompt. |
 | `write` | `twilio_disconnect` | Host approval prompt where supported. |
-| `approve` | `twilio_send_call`, `twilio_send_sms`, `twilio_purchase_number`, `twilio_configure_number` | Requires `confirm: true` **and** host approval. |
+| `approve` | `twilio_onboarding_complete`, `twilio_send_call`, `twilio_send_sms`, `twilio_purchase_number`, `twilio_configure_number` | Requires `confirm: true` **and** host approval. |
 | `admin` | Key deletion, record deletion, billing/account changes via `twilio_api_request` | Blocked unless `TWILIO_ALLOW_ADMIN=1`, then requires `confirm: true`. |
 
 Environment switches:
@@ -107,7 +113,7 @@ Environment switches:
 
 ## Tool catalog
 
-Setup: `twilio_status`, `twilio_setup_guide`, `twilio_disconnect`.
+Setup: `twilio_status`, `twilio_setup_guide`, `twilio_onboarding_guide`, `twilio_onboarding_status`, `twilio_onboarding_complete`, `twilio_disconnect`.
 
 Reads: phone numbers, available numbers, calls, call events, messages, usage records.
 

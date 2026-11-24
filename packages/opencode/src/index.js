@@ -12,7 +12,7 @@ export default Plugin.define({
       editor.namespace({
         name: "twilio",
         description:
-          "Twilio phone number and REST API. Calls/SMS/purchases/routing/admin actions require explicit owner approval and confirm:true.",
+          "Twilio phone number and REST API. Run twilio_onboarding_guide/status first; live calls/SMS/purchases/routing/admin actions stay blocked until owner onboarding is complete and require confirm:true.",
       });
 
       for (const tool of TOOLS) {

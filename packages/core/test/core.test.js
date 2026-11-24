@@ -4,7 +4,15 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { classifyRequest, redact, callTool, credentialStatus, SafetyError } from "../src/index.js";
+import {
+  classifyRequest,
+  redact,
+  callTool,
+  credentialStatus,
+  SafetyError,
+  onboardingStatus,
+  completeOnboarding,
+} from "../src/index.js";
 
 const ACCOUNT_SID = `AC${"a".repeat(32)}`;
 const AUTH_TOKEN = "twilio_test_token_1234567890";
@@ -28,6 +36,7 @@ function baseEnv(extra = {}) {
     TWILIO_ACCOUNT_SID: ACCOUNT_SID,
     TWILIO_AUTH_TOKEN: AUTH_TOKEN,
     TWILIO_PHONE_NUMBER: FROM,
+    TWILIO_ONBOARDING_COMPLETE: "1",
     TWILIO_CREDENTIALS_FILE: join(tmpdir(), "missing-apn-twilio.json"),
     ...extra,
   };
@@ -136,4 +145,45 @@ test("api passthrough classifies admin paths before sending", async () => {
       ),
     /TWILIO_ALLOW_ADMIN/,
   );
+});
+
+test("live tools are blocked until owner onboarding is complete", async () => {
+  const env = baseEnv({ TWILIO_ONBOARDING_COMPLETE: "0" });
+  const fetchImpl = mockFetch(() => ({ status: 201, body: { sid: "CAtest" } }));
+  await assert.rejects(
+    () =>
+      callTool(
+        "twilio_send_call",
+        { to: "+14155550199", message: "hi", confirm: true },
+        { env, fetchImpl },
+      ),
+    /twilio_onboarding_guide/,
+  );
+});
+
+test("owner attestation completes onboarding and records only last four digits", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "apn-onboarding-"));
+  const file = join(dir, "twilio-credentials.json");
+  await writeFile(file, JSON.stringify({ accountSid: ACCOUNT_SID, authToken: AUTH_TOKEN, phoneNumber: FROM }));
+  const env = { TWILIO_CREDENTIALS_FILE: file };
+
+  const before = await onboardingStatus({ env });
+  assert.equal(before.complete, false);
+  assert.ok(before.next);
+
+  const result = await completeOnboarding({
+    verifiedRecipient: "+14155550199",
+    acknowledgeTrialLimits: true,
+    acknowledgeCosts: true,
+    env,
+  });
+  assert.equal(result.status, "complete");
+  assert.equal(result.verifiedRecipient, "…0199");
+
+  const after = await onboardingStatus({ env });
+  assert.equal(after.complete, true);
+  const stored = await readFile(file, "utf8");
+  assert.ok(!stored.includes("+14155550199"));
+  assert.ok(stored.includes("0199"));
+  await rm(dir, { recursive: true, force: true });
 });

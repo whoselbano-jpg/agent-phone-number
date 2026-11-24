@@ -8,6 +8,7 @@ const INSTRUCTIONS = [
   "Twilio phone tools. The owner must create the Twilio account and verify recipient numbers in the Twilio Console.",
   "Never ask for credentials, verification codes, or card details in chat.",
   "Twilio trial accounts can call and text only verified numbers; do not bypass that restriction.",
+  "Before any live action, run twilio_onboarding_guide and twilio_onboarding_status. Walk the owner through every missing step, then run twilio_onboarding_complete only after the owner explicitly confirms. Live tools are blocked until then.",
   "Calls, SMS, number purchases, routing changes, and admin actions require confirm:true and host approval.",
   "Set TWILIO_DRY_RUN=1 for read-only mode. Use twilio_setup_guide for install steps.",
 ].join(" ");

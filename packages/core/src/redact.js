@@ -39,5 +39,5 @@ export function fingerprint(secret) {
 export function maskPhone(phone) {
   if (!phone) return "none";
   const digits = String(phone).replace(/\D/g, "");
-  return digits.length > 4 ? `…${digits.slice(-4)}` : "…";
+  return digits.length >= 4 ? `…${digits.slice(-4)}` : "…";
 }

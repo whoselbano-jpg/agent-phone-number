@@ -11,6 +11,7 @@ Rewrite the shared core and all three adapters from `bland_*` to `twilio_*`, kee
 - `twilio_send_call` builds `<Response><Say>...</Say></Response>` from a plain `message`, making one-way calls work with zero hosting.
 - Twilio POST bodies are form-encoded; responses are JSON.
 - `twilio_api_request` keeps full REST coverage with risk derived from method/path.
+- Live tools are gated by `assertOnboardingComplete` in shared `callTool`; the owner attestation stores only last-four-digit/cost/trial markers in the 0600 credentials file. `TWILIO_ONBOARDING_COMPLETE=1` is CI/test-only.
 
 ## Task list
 1. Replace core client, credentials, redaction, endpoints, and safety policy with Twilio equivalents.
@@ -18,6 +19,7 @@ Rewrite the shared core and all three adapters from `bland_*` to `twilio_*`, kee
 3. Update OpenCode plugin, MCP bridge, Claude plugin, and Codex config.
 4. Rewrite README, security notes, publishing notes, env example, and CI/manifests.
 5. Run tests/lint, verify JSON/TOML, commit, push if credentials are available.
+6. Add a mandatory owner onboarding gate so agents prompt for the Twilio account/number/verification/credential steps and cannot use live tools until the owner attests.
 
 ## Checkpoints
 - After task 2: `node scripts/test.js` and `node scripts/lint.js` pass.

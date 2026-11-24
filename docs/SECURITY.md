@@ -19,6 +19,16 @@
 
 OpenCode uses `ctx.permission.assert` so existing permission rules (including saved approvals and denies) apply. Claude Code and Codex keep their own MCP approval prompts on in the shipped configs. `twilio_api_request` is classified from method/path, with conservative defaults for unknown endpoints.
 
+## Owner onboarding gate
+
+Live tools (`twilio_send_call`, `twilio_send_sms`, `twilio_purchase_number`, `twilio_configure_number`) are blocked until the owner checklist is complete. The agent must:
+
+1. Run `twilio_onboarding_guide` and `twilio_onboarding_status`.
+2. Walk the owner through account creation, trial number, verified recipient, credentials, and trial/cost acknowledgement.
+3. Run `twilio_onboarding_complete` only after the owner explicitly confirms each item.
+
+Completion is stored in the 0600 credentials file as last-four-digit and boolean markers; raw recipient numbers and credentials are never returned by status tools. `TWILIO_ONBOARDING_COMPLETE=1` exists only for CI/tests and should never be used in a real setup.
+
 ## Calling and texting
 
 - The owner must create the Twilio account and verify recipient numbers in the Twilio Console. The agent must not ask for verification codes or bypass trial restrictions.

@@ -6,6 +6,8 @@
 - [x] Task 3: Update OpenCode plugin, MCP bridge, Claude plugin, and Codex config.
 - [x] Task 4: Rewrite README, security notes, publishing notes, env example, and manifests.
 - [x] Task 5: Ran final checks, verified stale Bland references are documentation-only, committed, and pushed to `origin/main`.
+- [x] Task 6: Added mandatory owner onboarding gate: `twilio_onboarding_guide`, `twilio_onboarding_status`, `twilio_onboarding_complete`, live-tool blocking in shared `callTool`, and `npm run onboarding` interactive checklist.
+- [x] Task 7: Ran final tests (10/10), lint (11/11), JSON validation, and adapter doc updates; committed and pushed.
 
 ## Notes
 

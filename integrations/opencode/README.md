@@ -36,3 +36,7 @@ To explore safely:
 ```
 
 Or set `TWILIO_DRY_RUN=1` in the environment to disable all non-read Twilio tools.
+
+## Owner onboarding gate
+
+Live tools (`twilio_send_call`, `twilio_send_sms`, `twilio_purchase_number`, `twilio_configure_number`) are blocked until the owner checklist is complete. Ask the agent to run `twilio_setup_guide`, `twilio_onboarding_guide`, and `twilio_onboarding_status`. Walk the owner through every missing step, then call `twilio_onboarding_complete` with `verifiedRecipient`, `acknowledgeTrialLimits: true`, `acknowledgeCosts: true`, and `confirm: true` only after the owner explicitly confirms. In a real setup never set `TWILIO_ONBOARDING_COMPLETE=1`; it exists only for CI/tests.

@@ -1,6 +1,7 @@
 import { TwilioClient } from "./client.js";
 import { classifyRequest } from "./endpoints.js";
 import { loadCredentials, credentialStatus, clearCredentials } from "./credentials.js";
+import { onboardingGuide, onboardingStatus, completeOnboarding, assertOnboardingComplete } from "./onboarding.js";
 import { decide, assertAllowed, permissionAction, actionSummary, RISK_READ, RISK_WRITE, RISK_APPROVE, RISK_ADMIN } from "./safety.js";
 
 const str = (description) => ({ type: "string", description });
@@ -127,6 +128,44 @@ export const TOOLS = Object.freeze([
       await clearCredentials({ env: ctx.env });
       return { status: "disconnected", message: "Local Twilio credentials removed." };
     },
+  }),
+  defineTool({
+    name: "twilio_onboarding_guide",
+    group: "Setup",
+    risk: RISK_READ,
+    description: "Show the owner checklist that must be completed before any live call, SMS, purchase, or routing change.",
+    input: { properties: {}, required: [] },
+    handler: async () => onboardingGuide(),
+  }),
+  defineTool({
+    name: "twilio_onboarding_status",
+    group: "Setup",
+    risk: RISK_READ,
+    description: "Check which owner onboarding steps are done. Live tools stay blocked until every step is complete.",
+    input: { properties: {}, required: [] },
+    handler: async (_input, ctx) => onboardingStatus({ env: ctx.env }),
+  }),
+  defineTool({
+    name: "twilio_onboarding_complete",
+    group: "Setup",
+    risk: RISK_APPROVE,
+    description:
+      "Record that the owner created the trial account, got a number, verified the recipient, and acknowledged trial limits/costs. Call only after the owner explicitly confirms each item.",
+    input: {
+      properties: {
+        verifiedRecipient: str("E.164 number the owner verified in the Twilio Console."),
+        acknowledgeTrialLimits: bool("Owner confirms trial calls/texts work only to verified numbers."),
+        acknowledgeCosts: bool("Owner confirms usage may cost money after trial credit."),
+      },
+      required: ["verifiedRecipient", "acknowledgeTrialLimits", "acknowledgeCosts"],
+    },
+    handler: async (input, ctx) =>
+      completeOnboarding({
+        verifiedRecipient: input.verifiedRecipient,
+        acknowledgeTrialLimits: input.acknowledgeTrialLimits,
+        acknowledgeCosts: input.acknowledgeCosts,
+        env: ctx.env,
+      }),
   }),
 
   // Read-only tools -----------------------------------------------------------
@@ -322,6 +361,10 @@ export async function callTool(name, input = {}, context = {}) {
   const risk = effectiveRisk(tool, input);
   const check = decide(risk, input, context.safetyOptions || { env });
 
+  // Fail fast on the owner checklist before asking the host for an approval
+  // prompt that cannot lead to a successful live action.
+  await assertOnboardingComplete(name, { env });
+
   if (typeof context.permission === "function") {
     await context.permission({
       risk,
@@ -424,12 +467,19 @@ approval_mode = "approve"
 
 Run \`codex mcp list\` to verify. Set \`TWILIO_DRY_RUN=1\` for a read-only session.
 
-## First run
+## First run — owner checklist
 
-1. \`twilio_status\` — check credentials and number.
-2. \`twilio_list_phone_numbers\` — confirm the caller ID.
-3. \`twilio_send_call\` with \`to\` and \`message\` — one-way call with spoken text, no webhook needed.
-4. \`twilio_get_call\` — verify status and duration.
+Live tools are blocked until this checklist is complete:
+
+1. The owner creates a Twilio trial account at https://www.twilio.com/try-twilio.
+2. The owner gets a trial number and verifies their own recipient number in the Twilio Console.
+3. The owner sets \`TWILIO_ACCOUNT_SID\`, \`TWILIO_AUTH_TOKEN\` (or API key pair), and \`TWILIO_PHONE_NUMBER\` in the shell or a 0600 credentials file.
+4. The agent runs \`twilio_onboarding_guide\` and \`twilio_onboarding_status\`.
+5. After the owner confirms the steps, the agent runs \`twilio_onboarding_complete\` with \`verifiedRecipient\`, \`acknowledgeTrialLimits: true\`, \`acknowledgeCosts: true\`, and \`confirm: true\`.
+6. Run \`twilio_status\` and \`twilio_list_phone_numbers\`, then \`twilio_send_call\` with \`to\` and \`message\` — one-way call with spoken text, no webhook needed.
+7. Run \`twilio_get_call\` — verify status and duration.
+
+A human can also run \`npm run onboarding\` from a checkout for an interactive checklist.
 
 Docs: https://www.twilio.com/docs/voice/api/call-resource
 `;

@@ -53,6 +53,7 @@ export async function loadCredentials({ env = process.env } = {}) {
     authMode,
     phoneNumber: env.TWILIO_PHONE_NUMBER || stored.phoneNumber || "",
     voiceUrl: env.TWILIO_VOICE_URL || stored.voiceUrl || "",
+    onboarding: stored.onboarding || null,
     source: useEnvApiKey || envAuthToken ? "environment" : password ? "file" : "none",
     file,
   };
