@@ -16,8 +16,8 @@ build/
 .github_token
 *.token
 credentials.json
-.bland/
-.bland-credentials.json
+twilio-credentials.json
+.twilio/
 
 # Editor / OS noise
 .DS_Store

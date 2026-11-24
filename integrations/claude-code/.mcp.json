@@ -1,11 +1,8 @@
 {
   "mcpServers": {
-    "bland": {
+    "twilio": {
       "command": "npx",
-      "args": ["-y", "agent-phone-number-mcp@0.1.0"],
-      "env": {
-        "BLAND_REGION": "${BLAND_REGION:-us}"
-      }
+      "args": ["-y", "agent-phone-number-mcp@0.2.0"]
     }
   }
 }

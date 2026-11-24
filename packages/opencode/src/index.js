@@ -3,25 +3,25 @@ import { TOOLS, callTool, permissionAction, RISK_READ } from "@agent-phone-numbe
 
 /**
  * OpenCode V2 server plugin.
- * Tools are registered as `bland_<name>` via the `bland` namespace.
+ * Tools are registered as `twilio_<name>` via the `twilio` namespace.
  */
 export default Plugin.define({
   id: "agent-phone-number",
   async setup(ctx) {
     await ctx.tool.transform((editor) => {
       editor.namespace({
-        name: "bland",
+        name: "twilio",
         description:
-          "Bland AI phone number and REST API. Calls/SMS/purchases/admin actions require explicit owner approval and confirm:true.",
+          "Twilio phone number and REST API. Calls/SMS/purchases/routing/admin actions require explicit owner approval and confirm:true.",
       });
 
       for (const tool of TOOLS) {
-        const shortName = tool.name.replace(/^bland_/, "");
+        const shortName = tool.name.replace(/^twilio_/, "");
         editor.add({
           name: shortName,
           description: tool.description,
           input: tool.input,
-          options: { namespace: "bland", codemode: true },
+          options: { namespace: "twilio", codemode: true },
           execute: async (input, executionContext) => {
             const result = await callTool(tool.name, input ?? {}, {
               env: process.env,
@@ -40,7 +40,7 @@ export default Plugin.define({
                   },
                   action,
                   resources: [toolName, ...Object.values(summary).map(String)],
-                  save: [permissionAction(risk) === "bland:approve" ? "bland:approve" : action],
+                  save: [permissionAction(risk)],
                 });
               },
             });

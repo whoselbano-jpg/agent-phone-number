@@ -1,9 +1,9 @@
 {
   "name": "agent-phone-number-monorepo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Give OpenCode, Claude Code, and Codex agents a Bland AI phone number with one install.",
+  "description": "Give OpenCode, Claude Code, and Codex agents a Twilio phone number with one install.",
   "license": "MIT",
   "workspaces": [
     "packages/*"
@@ -20,7 +20,7 @@
     "opencode",
     "claude-code",
     "codex",
-    "bland-ai",
+    "twilio",
     "phone-number",
     "mcp"
   ]

@@ -1,19 +1,19 @@
 {
   "name": "agent-phone-number",
-  "version": "0.1.0",
-  "description": "OpenCode V2 plugin: Bland AI phone number and full REST API tools.",
+  "version": "0.2.0",
+  "description": "OpenCode V2 plugin: Twilio phone number and full REST API tools.",
   "type": "module",
   "exports": {
     ".": "./src/index.js"
   },
   "files": ["src"],
   "dependencies": {
-    "@agent-phone-number/core": "0.1.0",
+    "@agent-phone-number/core": "0.2.0",
     "@opencode/plugin": "latest"
   },
   "engines": {
     "node": ">=20"
   },
   "license": "MIT",
-  "keywords": ["opencode-plugin", "bland-ai", "phone", "mcp"]
+  "keywords": ["opencode-plugin", "twilio", "phone", "mcp"]
 }

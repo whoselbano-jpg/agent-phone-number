@@ -5,15 +5,15 @@ import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprot
 import { mcpTools, callTool, redact } from "@agent-phone-number/core";
 
 const INSTRUCTIONS = [
-  "Bland AI phone tools. The owner must approve signup and the Agent Phone Plan in a browser.",
-  "Never ask for payment details or approve a purchase on the owner's behalf.",
-  "Never place API keys, device codes, or verification codes in chat or files.",
-  "Calls, SMS, batches, purchases, routing changes, and admin actions require confirm:true and host approval.",
-  "Set BLAND_DRY_RUN=1 for read-only mode. Use bland_setup_guide for install steps.",
+  "Twilio phone tools. The owner must create the Twilio account and verify recipient numbers in the Twilio Console.",
+  "Never ask for credentials, verification codes, or card details in chat.",
+  "Twilio trial accounts can call and text only verified numbers; do not bypass that restriction.",
+  "Calls, SMS, number purchases, routing changes, and admin actions require confirm:true and host approval.",
+  "Set TWILIO_DRY_RUN=1 for read-only mode. Use twilio_setup_guide for install steps.",
 ].join(" ");
 
 const server = new Server(
-  { name: "agent-phone-number", version: "0.1.0", instructions: INSTRUCTIONS },
+  { name: "agent-phone-number", version: "0.2.0", instructions: INSTRUCTIONS },
   { capabilities: { tools: {} } },
 );
 
@@ -31,7 +31,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       content: [
         {
           type: "text",
-          text: `Bland tool error: ${redact(error?.message || String(error), [process.env.BLAND_API_KEY])}`,
+          text: `Twilio tool error: ${redact(error?.message || String(error), [process.env.TWILIO_AUTH_TOKEN, process.env.TWILIO_API_SECRET])}`,
         },
       ],
       isError: true,
@@ -42,6 +42,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 try {
   await server.connect(new StdioServerTransport());
 } catch (error) {
-  process.stderr.write(`${redact(error?.message || String(error), [process.env.BLAND_API_KEY])}\n`);
+  process.stderr.write(
+    `${redact(error?.message || String(error), [process.env.TWILIO_AUTH_TOKEN, process.env.TWILIO_API_SECRET])}\n`,
+  );
   process.exitCode = 1;
 }

@@ -18,7 +18,7 @@ For local development from this repo:
 }
 ```
 
-OpenCode watches config and reloads plugins automatically; use `/reload` to force a reload. Tools are registered in the `bland` namespace and use the same catalog as the MCP bridge.
+OpenCode watches config and reloads plugins automatically; use `/reload` to force a reload. Tools are registered in the `twilio` namespace and use the same catalog as the MCP bridge.
 
 Paid and admin tools call `ctx.permission.assert`, so your existing OpenCode permission rules apply (including `deny` rules and saved approvals). Read-only tools skip the prompt.
 
@@ -29,10 +29,10 @@ To explore safely:
   "$schema": "https://opencode.ai/config.json",
   "plugins": ["agent-phone-number"],
   "permissions": [
-    { "action": "bland:approve", "resource": "*", "effect": "deny" },
-    { "action": "bland:admin", "resource": "*", "effect": "deny" }
+    { "action": "twilio:approve", "resource": "*", "effect": "deny" },
+    { "action": "twilio:admin", "resource": "*", "effect": "deny" }
   ]
 }
 ```
 
-Or set `BLAND_DRY_RUN=1` in the environment to disable all non-read Bland tools.
+Or set `TWILIO_DRY_RUN=1` in the environment to disable all non-read Twilio tools.

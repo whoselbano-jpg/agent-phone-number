@@ -1,7 +1,7 @@
 {
   "name": "agent-phone-number",
-  "description": "Give Claude Code a Bland AI phone number and full Bland REST API tools with owner-approval guardrails.",
-  "version": "0.1.0",
+  "description": "Give Claude Code a Twilio trial phone number and full Twilio REST API tools with owner-approval guardrails.",
+  "version": "0.2.0",
   "author": {
     "name": "agent-phone-number contributors"
   },

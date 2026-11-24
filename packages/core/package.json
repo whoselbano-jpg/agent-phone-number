@@ -1,7 +1,7 @@
 {
   "name": "@agent-phone-number/core",
-  "version": "0.1.0",
-  "description": "Shared Bland AI REST client, tool catalog, and safety policy for coding agents.",
+  "version": "0.2.0",
+  "description": "Shared Twilio REST client, tool catalog, and safety policy for coding agents.",
   "type": "module",
   "main": "src/index.js",
   "exports": {

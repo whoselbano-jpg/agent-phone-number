@@ -1,17 +1,26 @@
 # agent-phone-number
 
-Give your coding agent a phone number.
+Give your coding agent a phone number — **without Bland**.
 
-`agent-phone-number` is a small, unofficial plugin/MCP bridge that gives **OpenCode**, **Claude Code**, and **Codex** agents access to [Bland AI](https://www.bland.ai/) phone numbers — outbound calls, SMS, inbound number routing, agents, knowledge, analytics, and the rest of Bland's REST API — with one shared safety policy.
+`agent-phone-number` is a small, unofficial plugin/MCP bridge that gives **OpenCode**, **Claude Code**, and **Codex** agents a [Twilio](https://www.twilio.com/) phone number: outbound one-way voice calls, SMS, number management, call logs, and the rest of Twilio's REST API — with one shared safety policy.
 
-> This project is not affiliated with or endorsed by Bland AI. Bland's own hosted MCP server and `norm@bland` plugin also exist; see [Why another wrapper?](#why-another-wrapper).
+> This project is not affiliated with or endorsed by Twilio. Bland was removed in v0.2: its Agent Phone Plan costs $9.99 first month / $19.99 month, and the main free SIP DID programs were discontinued by 2026. Twilio's free trial is the practical free path.
+
+## What you actually get for free
+
+- A free Twilio trial phone number.
+- $15 trial credit for calls and SMS.
+- One-way AI voice calls using Twilio's built-in text-to-speech — no webhook server needed.
+- **Trial limitation:** you can call/text only numbers verified in the Twilio Console. That is a Twilio anti-abuse rule, not a plugin restriction.
+
+After the trial, Twilio numbers are typically ~$1/month plus per-minute/per-message usage. A fully unrestricted free number with automated AI calling does not currently exist from reputable providers.
 
 ## What you get
 
-- **One shared core** (`packages/core`) with a Bland REST client, region support, credential storage, device onboarding, endpoint risk classification, and a redaction layer.
-- **~40 curated tools** for the operations agents actually use, plus `bland_api_request` passthrough for **full REST coverage**.
-- **Consistent guardrails everywhere**: calls, SMS, batches, purchases, routing changes, promotions, and admin actions require explicit owner approval and `confirm: true`.
-- **No secrets in transcripts or the repo**: the approved API key is written to `~/.config/agent-phone-number/credentials.json` (mode 0600) or read from `BLAND_API_KEY`. Tool output shows only a fingerprint and masked number.
+- **One shared core** (`packages/core`) with a Twilio REST client, credential storage, endpoint risk classification, and redaction.
+- **~20 curated tools** plus `twilio_api_request` passthrough for full REST coverage.
+- **Consistent guardrails everywhere**: calls, SMS, purchases, routing changes, and admin actions require explicit owner approval and `confirm: true`.
+- **No secrets in transcripts or the repo**: credentials come from environment variables or a `0600` file at `~/.config/agent-phone-number/twilio-credentials.json`. Tool output shows only fingerprints and masked numbers.
 - **Adapters for all three agents**: an OpenCode V2 plugin, a Claude Code plugin, and a stdio MCP server for Codex (or any MCP client).
 
 ## Install
@@ -27,7 +36,7 @@ Add to `opencode.jsonc`:
 }
 ```
 
-Config changes reload automatically. Tools appear under the `bland` namespace (for example `bland_status`, `bland_send_call`).
+Config changes reload automatically. Tools appear under the `twilio` namespace (for example `twilio_status`, `twilio_send_call`).
 
 ### Claude Code
 
@@ -43,68 +52,75 @@ claude --plugin-dir ./integrations/claude-code
 # inside Claude Code: /reload-plugins
 ```
 
-The plugin starts `agent-phone-number-mcp` through `npx` and includes a `bland-phone` skill with the safety workflow.
+The plugin starts `agent-phone-number-mcp` through `npx` and includes a `twilio-phone` skill with the safety workflow.
 
 ### Codex
 
 Append [`integrations/codex/config.toml`](integrations/codex/config.toml) to `~/.codex/config.toml`, then run `codex mcp list`. In the TUI, `/mcp` shows connection state.
 
 ```toml
-[mcp_servers.bland]
+[mcp_servers.twilio]
 command = "npx"
-args = ["-y", "agent-phone-number-mcp@0.1.0"]
-env_vars = ["BLAND_API_KEY", "BLAND_REGION", "BLAND_CREDENTIALS_FILE"]
+args = ["-y", "agent-phone-number-mcp@0.2.0"]
+env_vars = ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER", "TWILIO_CREDENTIALS_FILE"]
 default_tools_approval_mode = "prompt"
 ```
 
+> The npm packages are not published yet. Until they are, replace the `npx` command with `node <repo>/packages/mcp/src/index.js` (or `npm link`). See [`docs/PUBLISHING.md`](docs/PUBLISHING.md).
+
 ## First run
 
-1. Ask the agent to run `bland_status`.
-2. Run `bland_connect_start`. It returns a verification URL and a user code.
-3. **The owner** opens the URL, signs up / starts the Agent Phone Plan, and approves the code in their browser. Never ask for payment details and never approve on their behalf.
-4. Run `bland_connect_poll`. On approval, the key is stored outside the repo; the result contains only a fingerprint and masked phone number.
-5. Inspect the account with `bland_list_voices`, `bland_list_phone_numbers`, and `bland_list_agents` before placing any live traffic.
+1. Create a Twilio trial account at <https://www.twilio.com/try-twilio>.
+2. Get a trial number and verify your own phone number in the Console.
+3. Set credentials in your shell (never in chat or a repo file):
+
+   ```bash
+   export TWILIO_ACCOUNT_SID=AC...
+   export TWILIO_AUTH_TOKEN=...
+   export TWILIO_PHONE_NUMBER=+1...
+   ```
+
+   An API key pair is also supported: `TWILIO_API_KEY` + `TWILIO_API_SECRET`.
+
+4. Ask the agent to run `twilio_status`, then `twilio_list_phone_numbers`.
+5. Run `twilio_send_call` with `to` and `message` to place a one-way call. The agent speaks your message with Twilio text-to-speech; no hosting or webhook is required.
+6. Run `twilio_get_call` with the returned SID to confirm status, duration, and price.
 
 ## Safety model
 
 | Tier | Examples | Behavior |
 | --- | --- | --- |
-| `read` | `bland_list_agents`, `bland_get_call`, `bland_query_analytics` | Runs without an extra prompt. |
-| `write` | `bland_create_agent`, `bland_save_agent_version`, knowledge uploads | Host approval prompt (Claude/Codex) or OpenCode permission rule. |
-| `approve` | `bland_send_call`, `bland_send_sms`, `bland_create_batch`, `bland_purchase_phone_number` | Requires `confirm: true` **and** host approval. |
-| `admin` | Bland's hosted MCP passthrough for billing/keys/SIP/deletes via `bland_api_request` | Blocked unless `BLAND_ALLOW_ADMIN=1`, then requires `confirm: true`. |
+| `read` | `twilio_list_calls`, `twilio_get_call`, `twilio_list_phone_numbers`, `twilio_get_usage` | Runs without an extra prompt. |
+| `write` | `twilio_disconnect` | Host approval prompt where supported. |
+| `approve` | `twilio_send_call`, `twilio_send_sms`, `twilio_purchase_number`, `twilio_configure_number` | Requires `confirm: true` **and** host approval. |
+| `admin` | Key deletion, record deletion, billing/account changes via `twilio_api_request` | Blocked unless `TWILIO_ALLOW_ADMIN=1`, then requires `confirm: true`. |
 
 Environment switches:
 
-- `BLAND_DRY_RUN=1` — disables every non-read tool.
-- `BLAND_ALLOW_ADMIN=1` — enables admin-tier operations (owner authorization required).
-- `BLAND_REGION=us|eu|ca|asia|au` — selects the regional API/app hosts.
-- `BLAND_CREDENTIALS_FILE` — override the credential file path.
-- `BLAND_AUTH_SCHEME=raw|bearer` — raw `authorization: <key>` is the Bland REST default.
-
-Bland's Agent Phone Plan limits: 1 concurrent call, 20 calls/hour, 50 calls/day, 20 texts/hour, 100 texts/day, US/CA destinations, $9.99 first month then $19.99/month. See [Bland's plan docs](https://docs.bland.ai/platform/agent-phone-plan.md).
+- `TWILIO_DRY_RUN=1` — disables every non-read tool.
+- `TWILIO_ALLOW_ADMIN=1` — enables admin-tier operations (owner authorization required).
+- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` — account credentials.
+- `TWILIO_API_KEY`, `TWILIO_API_SECRET` — alternative API-key credentials.
+- `TWILIO_PHONE_NUMBER` — default caller ID / SMS sender (E.164).
+- `TWILIO_CREDENTIALS_FILE` — override the credential file path.
+- `TWILIO_TIMEOUT_MS` — request timeout (default 60000).
 
 ## Tool catalog
 
-Setup: `bland_status`, `bland_connect_start`, `bland_connect_poll`, `bland_disconnect`, `bland_setup_guide`.
+Setup: `twilio_status`, `twilio_setup_guide`, `twilio_disconnect`.
 
-Reads: agents and versions, environments, number bindings, calls and active calls, voices, analytics, batches, SMS conversations, phone numbers, knowledge items, contacts, tools, dispositions.
+Reads: phone numbers, available numbers, calls, call events, messages, usage records.
 
-Writes: create agent, save agent version, upload knowledge text/file.
+Approved actions: send call, cancel call, send SMS, configure number, purchase number.
 
-Approved actions: send call, stop call, send SMS, create batch, attach numbers, promote agent, purchase number.
+Full coverage: `twilio_api_request` accepts any `method` + `path` + `pathParams` + `query` + `body`. Its risk tier is derived from the endpoint registry in [`packages/core/src/endpoints.js`](packages/core/src/endpoints.js). Check [Twilio's docs](https://www.twilio.com/docs) for exact endpoint shapes.
 
-Full coverage: `bland_api_request` accepts any `method` + `path` + `pathParams` + `query` + `body`. Its risk tier is derived from the endpoint registry in [`packages/core/src/endpoints.js`](packages/core/src/endpoints.js). Check [Bland's docs index](https://docs.bland.ai/llms.txt) for exact endpoint shapes.
+## Why not Bland?
 
-## Why another wrapper?
-
-Bland already publishes a hosted MCP server (`https://api.bland.ai/v1/mcp`) and the `norm@bland` plugin. Those are excellent, but:
-
-- this repo gives **one identical tool contract and safety policy across OpenCode, Claude Code, and Codex**;
-- the local bridge keeps device onboarding and credential handling in one place instead of asking the agent to paste a key into config;
-- the confirmation gate lives in shared code, not only in host annotations (Bland's MCP server does not ask for confirmation itself).
-
-You can still point Codex or Claude Code at Bland's hosted MCP directly; snippets are in [`integrations/codex/README.md`](integrations/codex/README.md).
+- Bland's own number costs $9.99 first month, then $19.99/month; no free dedicated number.
+- This repo keeps one identical tool contract and safety policy across OpenCode, Claude Code, and Codex.
+- The confirmation gate lives in shared code, not only in host annotations.
+- Outbound one-way calls use Twilio's inline `Twiml` parameter, so there is no server to host for basic usage.
 
 ## Development
 
@@ -114,16 +130,19 @@ npm test
 npm run lint
 ```
 
+On Windows where `npm.ps1` is blocked, run `node scripts/test.js` and `node scripts/lint.js` directly.
+
 Tests are plain `node:test` with a mocked `fetch`, so they make no network calls.
 
 ## Repository layout
 
 ```text
-packages/core/        shared client, tools, safety policy, onboarding
+packages/core/        shared Twilio client, tools, safety policy, credentials
 packages/opencode/    OpenCode V2 plugin (package name: agent-phone-number)
 packages/mcp/         stdio MCP bridge (package name: agent-phone-number-mcp)
 integrations/         Claude Code plugin and Codex config
-docs/                 security notes and endpoint catalog notes
+docs/                 security notes and publishing notes
+tasks/                implementation plan and task list
 ```
 
 ## License

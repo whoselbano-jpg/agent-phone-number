@@ -8,23 +8,16 @@ Append the contents of [`config.toml`](./config.toml) to `~/.codex/config.toml`,
 codex mcp list
 ```
 
-In the TUI, `/mcp` shows connection state. The bridge reads `BLAND_API_KEY` or the credentials file at `~/.config/agent-phone-number/credentials.json`.
+In the TUI, `/mcp` shows connection state. The bridge reads `TWILIO_ACCOUNT_SID` plus `TWILIO_AUTH_TOKEN` (or `TWILIO_API_KEY` + `TWILIO_API_SECRET`), and `TWILIO_PHONE_NUMBER` for the caller ID. A 0600 credentials file at `~/.config/agent-phone-number/twilio-credentials.json` is also supported.
 
 For a read-only session:
 
 ```bash
-export BLAND_DRY_RUN=1
+export TWILIO_DRY_RUN=1
 ```
 
-## Alternative: Bland's hosted MCP
+Twilio trial accounts can call and text only numbers you verified in the Twilio Console. The owner must complete verification; the agent must not ask for verification codes or credentials.
 
-If you prefer Bland's first-party MCP server instead of this bridge:
+## Alternative: direct webhook
 
-```toml
-[mcp_servers.bland]
-url = "https://api.bland.ai/v1/mcp"
-bearer_token_env_var = "BLAND_API_KEY"
-default_tools_approval_mode = "prompt"
-```
-
-Hosted MCP has broad tool coverage but does not enforce this repo's confirmation policy by itself — keep Codex approval prompts enabled. This bridge is preferred when you want consistent guardrails across OpenCode, Claude Code, and Codex.
+If you want inbound calls to speak a fixed message without this bridge, configure the number's `VoiceUrl` in the Twilio Console with an HTTPS endpoint that returns TwiML. This repo's `twilio_send_call` avoids that requirement by sending inline TwiML for outbound one-way calls.
