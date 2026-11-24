@@ -32,7 +32,7 @@ Config changes reload automatically. Tools appear under the `bland` namespace (f
 ### Claude Code
 
 ```bash
-claude plugin marketplace add <owner>/agent-phone-number
+claude plugin marketplace add whoselbano-jpg/agent-phone-number
 claude plugin install agent-phone-number
 ```
 

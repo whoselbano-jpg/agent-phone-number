@@ -4,5 +4,7 @@
   "version": "0.1.0",
   "author": {
     "name": "agent-phone-number contributors"
-  }
+  },
+  "homepage": "https://github.com/whoselbano-jpg/agent-phone-number",
+  "repository": "https://github.com/whoselbano-jpg/agent-phone-number"
 }

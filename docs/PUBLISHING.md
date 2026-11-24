@@ -20,7 +20,7 @@ npm publish -w packages/mcp
 For a local marketplace, point Claude Code at a checkout:
 
 ```bash
-claude plugin marketplace add <owner>/agent-phone-number
+claude plugin marketplace add whoselbano-jpg/agent-phone-number
 claude plugin install agent-phone-number
 ```
 
