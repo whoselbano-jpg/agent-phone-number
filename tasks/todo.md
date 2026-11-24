@@ -5,7 +5,7 @@
 - [x] Checkpoint: `node scripts/test.js` 8/8 and `node scripts/lint.js` passed after core.
 - [x] Task 3: Update OpenCode plugin, MCP bridge, Claude plugin, and Codex config.
 - [x] Task 4: Rewrite README, security notes, publishing notes, env example, and manifests.
-- [ ] Task 5: Run final checks, verify no stale Bland references, commit, and push if credentials are available.
+- [x] Task 5: Ran final checks, verified stale Bland references are documentation-only, committed, and pushed to `origin/main`.
 
 ## Notes
 
