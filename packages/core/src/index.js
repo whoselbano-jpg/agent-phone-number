@@ -1,5 +1,4 @@
-export { BlandClient, BlandError, unauthenticatedRequest } from "./client.js";
-export { resolveRegion, mcpEndpoint, REGIONS, DEFAULT_REGION } from "./regions.js";
+export { TwilioClient, TwilioError } from "./client.js";
 export {
   loadCredentials,
   saveCredentials,
@@ -7,7 +6,6 @@ export {
   credentialStatus,
   DEFAULT_CREDENTIALS_FILE,
 } from "./credentials.js";
-export { connectStart, connectPoll, disconnect } from "./onboarding.js";
 export { redact, fingerprint, maskPhone } from "./redact.js";
 export { ENDPOINTS, ENDPOINT_BY_ID, classifyRequest } from "./endpoints.js";
 export {

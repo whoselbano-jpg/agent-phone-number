@@ -7,16 +7,16 @@ export const DEFAULT_CREDENTIALS_FILE = join(
   homedir(),
   ".config",
   "agent-phone-number",
-  "credentials.json",
+  "twilio-credentials.json",
 );
 
 export function resolveCredentialsFile(env = process.env) {
-  return resolve(env.BLAND_CREDENTIALS_FILE || DEFAULT_CREDENTIALS_FILE);
+  return resolve(env.TWILIO_CREDENTIALS_FILE || DEFAULT_CREDENTIALS_FILE);
 }
 
 /**
  * Credentials always come from the environment or a 0600 file outside the repo.
- * Never commit them and never return the raw key from a tool.
+ * Never commit them and never return a raw secret from a tool.
  */
 export async function loadCredentials({ env = process.env } = {}) {
   const file = resolveCredentialsFile(env);
@@ -28,17 +28,32 @@ export async function loadCredentials({ env = process.env } = {}) {
       throw new Error(`Could not read credentials file ${file}: ${redact(error.message)}`);
     }
   }
-  const apiKey = env.BLAND_API_KEY || stored.apiKey || "";
+
+  const envAccountSid = env.TWILIO_ACCOUNT_SID || "";
+  const envAuthToken = env.TWILIO_AUTH_TOKEN || "";
+  const envApiKey = env.TWILIO_API_KEY || "";
+  const envApiSecret = env.TWILIO_API_SECRET || "";
+  const useEnvApiKey = Boolean(envApiKey && envApiSecret);
+
+  const accountSid = envAccountSid || stored.accountSid || "";
+  const authToken = useEnvApiKey ? "" : envAuthToken || stored.authToken || "";
+  const apiKey = useEnvApiKey ? envApiKey : stored.apiKey || "";
+  const apiSecret = useEnvApiKey ? envApiSecret : stored.apiSecret || "";
+  const username = apiKey || accountSid;
+  const password = apiSecret || authToken;
+  const authMode = apiKey && apiSecret ? "api-key" : authToken ? "auth-token" : "none";
+
   return {
+    accountSid,
+    authToken,
     apiKey,
-    orgId: stored.orgId || "",
-    phoneNumber: stored.phoneNumber || "",
-    plan: stored.plan || "",
-    clientName: stored.clientName || "",
-    pendingDeviceCode: stored.pendingDeviceCode || "",
-    pendingExpiresAt: stored.pendingExpiresAt || "",
-    region: env.BLAND_REGION || stored.region || "us",
-    source: env.BLAND_API_KEY ? "environment" : apiKey ? "file" : "none",
+    apiSecret,
+    username,
+    password,
+    authMode,
+    phoneNumber: env.TWILIO_PHONE_NUMBER || stored.phoneNumber || "",
+    voiceUrl: env.TWILIO_VOICE_URL || stored.voiceUrl || "",
+    source: useEnvApiKey || envAuthToken ? "environment" : password ? "file" : "none",
     file,
   };
 }
@@ -53,6 +68,8 @@ export async function saveCredentials(data, { env = process.env } = {}) {
   };
   delete next.source;
   delete next.file;
+  delete next.username;
+  delete next.password;
   await mkdir(dirname(file), { recursive: true });
   await writeFile(file, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
   await chmod(file, 0o600).catch(() => {});
@@ -66,22 +83,22 @@ export async function clearCredentials({ env = process.env } = {}) {
   });
 }
 
-/** Safe to show in a chat transcript: no key, device code, or raw phone number. */
+/** Safe to show in a chat transcript: no token, key, or full phone number. */
 export async function credentialStatus({ env = process.env } = {}) {
   const value = await loadCredentials({ env });
+  const secret = value.password;
   return {
-    connected: Boolean(value.apiKey),
+    connected: Boolean(value.accountSid && secret),
     source: value.source,
-    key: fingerprint(value.apiKey),
-    orgId: value.orgId ? maskPhone(value.orgId) : "none",
+    accountSid: value.accountSid ? maskPhone(value.accountSid) : "none",
+    auth: `${value.authMode}:${fingerprint(secret)}`,
     phoneNumber: maskPhone(value.phoneNumber),
-    region: value.region,
-    plan: value.plan || "unknown",
-    clientName: value.clientName || "unknown",
     credentialsFile: value.file,
+    trialNotice:
+      "Twilio trial numbers can call and text only numbers verified in the Twilio Console; calls use trial credit.",
     warning:
       value.source === "environment"
-        ? "Key came from BLAND_API_KEY; onboarding changes will not persist across processes unless saved to the credentials file."
+        ? "Credentials came from environment variables; they will not persist across processes unless saved to the credentials file."
         : null,
   };
 }

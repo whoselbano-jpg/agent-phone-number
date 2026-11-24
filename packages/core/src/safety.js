@@ -16,8 +16,8 @@ export class SafetyError extends Error {
 export function safetyConfig(options = {}) {
   const env = options.env || process.env;
   return {
-    allowAdmin: options.allowAdmin ?? env.BLAND_ALLOW_ADMIN === "1",
-    dryRun: options.dryRun ?? env.BLAND_DRY_RUN === "1",
+    allowAdmin: options.allowAdmin ?? env.TWILIO_ALLOW_ADMIN === "1",
+    dryRun: options.dryRun ?? env.TWILIO_DRY_RUN === "1",
   };
 }
 
@@ -33,7 +33,7 @@ export function decide(risk, input = {}, options = {}) {
     return {
       allowed: false,
       level: "dry-run",
-      reason: "BLAND_DRY_RUN is enabled; only read-only Bland tools are available.",
+      reason: "TWILIO_DRY_RUN is enabled; only read-only Twilio tools are available.",
       config,
     };
   }
@@ -42,7 +42,7 @@ export function decide(risk, input = {}, options = {}) {
       allowed: false,
       level: "denied",
       reason:
-        "This is an admin-level Bland operation. Set BLAND_ALLOW_ADMIN=1 and pass confirm:true only if the owner explicitly authorized it.",
+        "This is an admin-level Twilio operation. Set TWILIO_ALLOW_ADMIN=1 and pass confirm:true only if the owner explicitly authorized it.",
       config,
     };
   }
@@ -51,7 +51,7 @@ export function decide(risk, input = {}, options = {}) {
       allowed: false,
       level: "confirm",
       reason:
-        "This Bland action can spend money, place live traffic, or change live routing. Re-run with confirm:true after owner approval.",
+        "This Twilio action can spend money, place live traffic, or change live routing. Re-run with confirm:true after owner approval.",
       config,
     };
   }
@@ -66,7 +66,7 @@ export function assertAllowed(risk, input, options) {
 
 /** Permission action name used by OpenCode's ctx.permission.assert. */
 export function permissionAction(risk) {
-  return `bland:${risk === RISK_READ ? "read" : risk === RISK_WRITE ? "write" : risk === RISK_ADMIN ? "admin" : "approve"}`;
+  return `twilio:${risk === RISK_READ ? "read" : risk === RISK_WRITE ? "write" : risk === RISK_ADMIN ? "admin" : "approve"}`;
 }
 
 /** Redacted description shown in approval prompts and tool results. */
@@ -74,16 +74,13 @@ export function actionSummary(name, input = {}) {
   const fields = {};
   for (const key of [
     "to",
-    "phone_number",
-    "user_number",
-    "agent_number",
-    "agent_id",
-    "call_id",
-    "batch_id",
+    "from",
+    "phoneNumber",
+    "phone_number_sid",
+    "call_sid",
+    "message_sid",
     "path",
     "method",
-    "environment",
-    "version_id",
   ]) {
     if (input[key] !== undefined) fields[key] = redact(String(input[key]));
   }

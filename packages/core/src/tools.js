@@ -1,14 +1,15 @@
-import { BlandClient } from "./client.js";
+import { TwilioClient } from "./client.js";
 import { classifyRequest } from "./endpoints.js";
-import { loadCredentials } from "./credentials.js";
-import { connectStart, connectPoll, disconnect } from "./onboarding.js";
-import { credentialStatus } from "./credentials.js";
+import { loadCredentials, credentialStatus, clearCredentials } from "./credentials.js";
 import { decide, assertAllowed, permissionAction, actionSummary, RISK_READ, RISK_WRITE, RISK_APPROVE, RISK_ADMIN } from "./safety.js";
 
 const str = (description) => ({ type: "string", description });
 const bool = (description) => ({ type: "boolean", description });
+const num = (description) => ({ type: "integer", description });
 const obj = (description = "Object") => ({ type: "object", description, additionalProperties: true });
 const pathParam = (description) => str(description);
+
+const A = "/2010-04-01/Accounts/{account_sid}";
 
 function defineTool(definition) {
   const risk = definition.risk || RISK_APPROVE;
@@ -31,7 +32,7 @@ function defineTool(definition) {
   });
 }
 
-/** Build a handler that forwards to a documented Bland REST path. */
+/** Build a handler that forwards to a documented Twilio REST path. */
 const call = (method, path, pathKeys = [], queryFromInput = false) =>
   async (input, ctx) => {
     const pathParams = Object.fromEntries(pathKeys.map((key) => [key, input[key]]));
@@ -46,164 +47,232 @@ const call = (method, path, pathKeys = [], queryFromInput = false) =>
     return result.data;
   };
 
+function escapeXml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function requireE164(value, label = "to") {
+  const normalized = String(value || "").trim();
+  if (!/^\+[1-9]\d{7,14}$/.test(normalized)) {
+    throw new Error(`${label} must be an E.164 number such as +14155550100.`);
+  }
+  return normalized;
+}
+
+function callBody(input, credentials) {
+  const from = input.from || credentials.phoneNumber;
+  if (!from) throw new Error("No From number configured. Set TWILIO_PHONE_NUMBER or pass from explicitly.");
+  const sources = [input.message, input.twiml, input.url].filter((value) => Boolean(value));
+  if (sources.length !== 1) {
+    throw new Error("Provide exactly one of message, twiml, or url.");
+  }
+  const body = { To: requireE164(input.to), From: from };
+  if (input.url) {
+    body.Url = input.url;
+    if (input.method) body.Method = input.method;
+  } else if (input.twiml) {
+    if (input.twiml.length > 4000) throw new Error("Twiml must be 4000 characters or fewer.");
+    body.Twiml = input.twiml;
+  } else {
+    const twiml = `<Response><Say>${escapeXml(input.message)}</Say></Response>`;
+    if (twiml.length > 4000) throw new Error("Message is too long for inline TwiML (4000 characters max).");
+    body.Twiml = twiml;
+  }
+  if (input.record !== undefined) body.Record = Boolean(input.record);
+  if (input.timeout !== undefined) body.Timeout = input.timeout;
+  if (input.statusCallback) body.StatusCallback = input.statusCallback;
+  return body;
+}
+
+function smsBody(input, credentials) {
+  const from = input.from || credentials.phoneNumber;
+  if (!from) throw new Error("No From number configured. Set TWILIO_PHONE_NUMBER or pass from explicitly.");
+  const message = String(input.message || "").trim();
+  if (!message) throw new Error("message is required.");
+  if (message.length > 1600) throw new Error("message must be 1600 characters or fewer.");
+  const body = { To: requireE164(input.to), From: from, Body: message };
+  if (input.statusCallback) body.StatusCallback = input.statusCallback;
+  return body;
+}
+
 export const TOOLS = Object.freeze([
   defineTool({
-    name: "bland_status",
+    name: "twilio_status",
     group: "Setup",
     risk: RISK_READ,
-    description: "Show Bland connection state: masked key fingerprint, masked number, region, and plan. Never reveals secrets.",
+    description: "Show Twilio connection state: masked Account SID, masked number, auth fingerprint, and trial notice. Never reveals secrets.",
     input: { properties: {}, required: [] },
     handler: async (_input, ctx) => credentialStatus({ env: ctx.env }),
   }),
   defineTool({
-    name: "bland_connect_start",
-    group: "Setup",
-    risk: RISK_WRITE,
-    description:
-      "Start Bland device authorization to give this agent its own phone number. Returns a verification URL and user code for the OWNER to approve in a browser. Never ask for payment details and never approve the plan yourself.",
-    input: {
-      properties: {
-        clientName: str("Name shown for this agent in Bland (default: my-coding-agent)."),
-        prefill: obj("Optional owner prefill: name, first_name, last_name, email, phone."),
-      },
-      required: [],
-    },
-    handler: async (input, ctx) =>
-      connectStart({
-        clientName: input.clientName,
-        prefill: input.prefill,
-        region: ctx.region,
-        fetchImpl: ctx.fetchImpl,
-        signal: ctx.signal,
-        credentials: { env: ctx.env },
-      }),
-  }),
-  defineTool({
-    name: "bland_connect_poll",
-    group: "Setup",
-    risk: RISK_WRITE,
-    description:
-      "Poll Bland device authorization once. On owner approval the API key is saved outside the repo; the tool returns only a fingerprint and masked phone number.",
-    input: { properties: {}, required: [] },
-    handler: async (_input, ctx) =>
-      connectPoll({
-        region: ctx.region,
-        fetchImpl: ctx.fetchImpl,
-        signal: ctx.signal,
-        credentials: { env: ctx.env },
-      }),
-  }),
-  defineTool({
-    name: "bland_disconnect",
-    group: "Setup",
-    risk: RISK_WRITE,
-    description: "Remove locally stored Bland credentials. Also revoke the key in Bland settings if it should no longer work.",
-    input: { properties: {}, required: [] },
-    handler: (_input, ctx) => disconnect({ env: ctx.env }),
-  }),
-  defineTool({
-    name: "bland_setup_guide",
+    name: "twilio_setup_guide",
     group: "Setup",
     risk: RISK_READ,
     description: "Get install/config snippets for OpenCode, Claude Code, and Codex plus the safety rules for phone actions.",
     input: { properties: {}, required: [] },
     handler: async () => SETUP_GUIDE,
   }),
+  defineTool({
+    name: "twilio_disconnect",
+    group: "Setup",
+    risk: RISK_WRITE,
+    description: "Remove locally stored Twilio credentials. Revoke the key or auth token in the Twilio Console if it should no longer work.",
+    input: { properties: {}, required: [] },
+    handler: async (_input, ctx) => {
+      await clearCredentials({ env: ctx.env });
+      return { status: "disconnected", message: "Local Twilio credentials removed." };
+    },
+  }),
 
   // Read-only tools -----------------------------------------------------------
-  defineTool({ name: "bland_list_agents", group: "Agents", risk: RISK_READ, description: "List Bland agents (v2).", input: { properties: {}, required: [] }, handler: call("GET", "/v2/agents") }),
-  defineTool({ name: "bland_get_agent", group: "Agents", risk: RISK_READ, description: "Get one Bland agent by ID.", input: { properties: { agent_id: pathParam("Agent ID.") }, required: ["agent_id"] }, handler: call("GET", "/v2/agents/{agent_id}", ["agent_id"]) }),
-  defineTool({ name: "bland_list_agent_versions", group: "Agents", risk: RISK_READ, description: "List saved versions of an agent.", input: { properties: { agent_id: pathParam("Agent ID.") }, required: ["agent_id"] }, handler: call("GET", "/v2/agents/{agent_id}/versions", ["agent_id"]) }),
-  defineTool({ name: "bland_get_latest_agent_version", group: "Agents", risk: RISK_READ, description: "Get the newest saved agent version snapshot.", input: { properties: { agent_id: pathParam("Agent ID.") }, required: ["agent_id"] }, handler: call("GET", "/v2/agents/{agent_id}/versions/latest", ["agent_id"]) }),
-  defineTool({ name: "bland_list_agent_environments", group: "Agents", risk: RISK_READ, description: "List an agent's dev/staging/production pins.", input: { properties: { agent_id: pathParam("Agent ID.") }, required: ["agent_id"] }, handler: call("GET", "/v2/agents/{agent_id}/environments", ["agent_id"]) }),
-  defineTool({ name: "bland_get_agent_number_binding", group: "Agents", risk: RISK_READ, description: "Check which phone numbers route to an agent.", input: { properties: { agent_id: pathParam("Agent ID.") }, required: ["agent_id"] }, handler: call("GET", "/v2/agents/{agent_id}/inbound", ["agent_id"]) }),
-  defineTool({ name: "bland_list_calls", group: "Calls", risk: RISK_READ, description: "List call metadata. Optional query filters are passed through.", input: { properties: { query: obj("Bland list-call query filters, e.g. {limit, before, after}.") }, required: [] }, handler: call("GET", "/v1/calls", [], true) }),
-  defineTool({ name: "bland_get_call", group: "Calls", risk: RISK_READ, description: "Get call details, metadata, and transcript.", input: { properties: { call_id: pathParam("Call ID.") }, required: ["call_id"] }, handler: call("GET", "/v1/calls/{call_id}", ["call_id"]) }),
-  defineTool({ name: "bland_list_active_calls", group: "Calls", risk: RISK_READ, description: "List queued and in-progress calls.", input: { properties: {}, required: [] }, handler: call("GET", "/v1/active") }),
-  defineTool({ name: "bland_list_voices", group: "Voices", risk: RISK_READ, description: "List voices available to the account.", input: { properties: {}, required: [] }, handler: call("GET", "/v1/voices") }),
-  defineTool({ name: "bland_query_analytics", group: "Analytics", risk: RISK_READ, description: "Query Bland analytics with a request body.", input: { properties: { body: obj("Analytics query body (time range, filters, metrics).") }, required: ["body"] }, handler: call("POST", "/v1/analytics/query") }),
-  defineTool({ name: "bland_list_batches", group: "Batches", risk: RISK_READ, description: "List call batches.", input: { properties: {}, required: [] }, handler: call("GET", "/v2/batches") }),
-  defineTool({ name: "bland_get_batch", group: "Batches", risk: RISK_READ, description: "Get one batch by ID.", input: { properties: { batch_id: pathParam("Batch ID.") }, required: ["batch_id"] }, handler: call("GET", "/v2/batches/{batch_id}", ["batch_id"]) }),
-  defineTool({ name: "bland_get_batch_logs", group: "Batches", risk: RISK_READ, description: "Get logs for a batch.", input: { properties: { batch_id: pathParam("Batch ID.") }, required: ["batch_id"] }, handler: call("GET", "/v2/batches/{batch_id}/logs", ["batch_id"]) }),
-  defineTool({ name: "bland_list_sms_numbers", group: "Messaging", risk: RISK_READ, description: "List SMS-enabled numbers.", input: { properties: {}, required: [] }, handler: call("GET", "/v1/sms/numbers") }),
-  defineTool({ name: "bland_list_sms_conversations", group: "Messaging", risk: RISK_READ, description: "List SMS conversations.", input: { properties: { query: obj("Optional filters.") }, required: [] }, handler: call("GET", "/v1/sms/conversations", [], true) }),
-  defineTool({ name: "bland_get_sms_conversation", group: "Messaging", risk: RISK_READ, description: "Get an SMS conversation by ID.", input: { properties: { conversation_id: pathParam("Conversation ID.") }, required: ["conversation_id"] }, handler: call("GET", "/v1/sms/conversations/{conversation_id}", ["conversation_id"]) }),
-  defineTool({ name: "bland_list_phone_numbers", group: "Numbers", risk: RISK_READ, description: "List inbound phone numbers on the account.", input: { properties: {}, required: [] }, handler: call("GET", "/v1/inbound") }),
-  defineTool({ name: "bland_get_phone_number", group: "Numbers", risk: RISK_READ, description: "Get settings for an inbound number.", input: { properties: { query: obj("Query with phone_number or number ID as documented by Bland.") }, required: ["query"] }, handler: call("GET", "/v1/inbound-number", [], true) }),
-  defineTool({ name: "bland_list_knowledge_bases", group: "Knowledge", risk: RISK_READ, description: "List knowledge base items.", input: { properties: { query: obj("Optional pagination filters.") }, required: [] }, handler: call("GET", "/v1/knowledge", [], true) }),
-  defineTool({ name: "bland_get_knowledge_base", group: "Knowledge", risk: RISK_READ, description: "Get one knowledge base item.", input: { properties: { knowledge_id: pathParam("Knowledge item ID.") }, required: ["knowledge_id"] }, handler: call("GET", "/v1/knowledge/{knowledge_id}", ["knowledge_id"]) }),
-  defineTool({ name: "bland_list_contacts", group: "Contacts", risk: RISK_READ, description: "List contacts.", input: { properties: { query: obj("Optional filters.") }, required: [] }, handler: call("GET", "/v1/contacts", [], true) }),
-  defineTool({ name: "bland_get_contact", group: "Contacts", risk: RISK_READ, description: "Get one contact by ID.", input: { properties: { contact_id: pathParam("Contact ID.") }, required: ["contact_id"] }, handler: call("GET", "/v1/contacts/{contact_id}", ["contact_id"]) }),
-  defineTool({ name: "bland_list_tools", group: "Tools", risk: RISK_READ, description: "List Bland in-call tools.", input: { properties: {}, required: [] }, handler: call("GET", "/v2/tools") }),
-  defineTool({ name: "bland_list_agent_dispositions", group: "Agents", risk: RISK_READ, description: "List an agent's dispositions.", input: { properties: { agent_id: pathParam("Agent ID.") }, required: ["agent_id"] }, handler: call("GET", "/v2/agents/{agent_id}/dispositions", ["agent_id"]) }),
+  defineTool({ name: "twilio_list_phone_numbers", group: "Numbers", risk: RISK_READ, description: "List Twilio phone numbers on the account.", input: { properties: { query: obj("Optional Twilio filters, e.g. {PageSize, PhoneNumber}.") }, required: [] }, handler: call("GET", `${A}/IncomingPhoneNumbers.json`, [], true) }),
+  defineTool({ name: "twilio_get_phone_number", group: "Numbers", risk: RISK_READ, description: "Get one Twilio phone number by SID.", input: { properties: { phone_number_sid: pathParam("Phone number SID (PN…).") }, required: ["phone_number_sid"] }, handler: call("GET", `${A}/IncomingPhoneNumbers/{phone_number_sid}.json`, ["phone_number_sid"]) }),
+  defineTool({ name: "twilio_search_numbers", group: "Numbers", risk: RISK_READ, description: "Search available Twilio numbers before buying one.", input: { properties: { country_code: str("Country code, default US."), number_type: str("local, mobile, or toll-free; default local."), query: obj("Filters such as {AreaCode, Contains, Limit}.") }, required: [] }, handler: async (input, ctx) => call("GET", `${A}/AvailablePhoneNumbers/{country_code}/{number_type}.json`, ["country_code", "number_type"], true)({ ...input, country_code: input.country_code || "US", number_type: input.number_type || "local" }, ctx) }),
+  defineTool({ name: "twilio_list_calls", group: "Calls", risk: RISK_READ, description: "List call metadata. Optional Twilio query filters are passed through.", input: { properties: { query: obj("Twilio list-call filters, e.g. {To, From, Status, PageSize}.") }, required: [] }, handler: call("GET", `${A}/Calls.json`, [], true) }),
+  defineTool({ name: "twilio_get_call", group: "Calls", risk: RISK_READ, description: "Get call details, status, price, and duration.", input: { properties: { call_sid: pathParam("Call SID (CA…).") }, required: ["call_sid"] }, handler: call("GET", `${A}/Calls/{call_sid}.json`, ["call_sid"]) }),
+  defineTool({ name: "twilio_list_call_events", group: "Calls", risk: RISK_READ, description: "List progress events for a call.", input: { properties: { call_sid: pathParam("Call SID (CA…).") }, required: ["call_sid"] }, handler: call("GET", `${A}/Calls/{call_sid}/Events.json`, ["call_sid"]) }),
+  defineTool({ name: "twilio_list_messages", group: "Messaging", risk: RISK_READ, description: "List messages. Optional Twilio query filters are passed through.", input: { properties: { query: obj("Filters such as {To, From, DateSent, PageSize}.") }, required: [] }, handler: call("GET", `${A}/Messages.json`, [], true) }),
+  defineTool({ name: "twilio_get_message", group: "Messaging", risk: RISK_READ, description: "Get one message by SID.", input: { properties: { message_sid: pathParam("Message SID (SM…).") }, required: ["message_sid"] }, handler: call("GET", `${A}/Messages/{message_sid}.json`, ["message_sid"]) }),
+  defineTool({ name: "twilio_get_usage", group: "Billing", risk: RISK_READ, description: "List account usage records.", input: { properties: { query: obj("Twilio usage filters, e.g. {Category, StartDate, EndDate}.") }, required: [] }, handler: call("GET", `${A}/Usage/Records.json`, [], true) }),
 
-  // Configuration writes ------------------------------------------------------
-  defineTool({ name: "bland_create_agent", group: "Agents", risk: RISK_WRITE, description: "Create an empty Bland agent (draft only; does not publish or route numbers).", input: { properties: { body: obj("Bland create-agent body, e.g. {name, role}.") }, required: ["body"] }, handler: call("POST", "/v2/agents") }),
-  defineTool({ name: "bland_save_agent_version", group: "Agents", risk: RISK_WRITE, description: "Save a new agent configuration version. Publishing is a separate confirmed action.", input: { properties: { agent_id: pathParam("Agent ID."), body: obj("Body with snapshot: behavior, settings, contact, optional knowledge.") }, required: ["agent_id", "body"] }, handler: call("POST", "/v2/agents/{agent_id}/versions", ["agent_id"]) }),
-  defineTool({ name: "bland_upload_knowledge_text", group: "Knowledge", risk: RISK_WRITE, description: "Add text to a knowledge base (max 1MB).", input: { properties: { body: obj("Body with type:'text', name, text.") }, required: ["body"] }, handler: call("POST", "/v1/knowledgeLearn/text") }),
+  // Live / paid actions -------------------------------------------------------
   defineTool({
-    name: "bland_upload_knowledge_file",
-    group: "Knowledge",
-    risk: RISK_WRITE,
-    description: "Upload a base64-encoded file to a knowledge base using multipart/form-data.",
+    name: "twilio_send_call",
+    group: "Calls",
+    risk: RISK_APPROVE,
+    description:
+      "Place an outbound one-way voice call. Provide a plain message (spoken with Twilio text-to-speech), raw twiml, or a URL. Verify the destination with the owner before confirming.",
     input: {
       properties: {
-        name: str("Knowledge item name."),
-        fileBase64: str("Base64-encoded file contents."),
-        fileName: str("Filename including extension."),
-        contentType: str("MIME type, e.g. text/plain or application/pdf."),
-        description: str("Optional description."),
+        to: str("Destination in E.164 format, e.g. +14155550100."),
+        message: str("Plain text for Twilio to speak. Escaped into inline TwiML; no webhook needed."),
+        twiml: str("Optional raw TwiML instead of message (4000 chars max)."),
+        url: str("Optional HTTPS URL returning TwiML instead of message/twiml."),
+        from: str("Optional caller ID; defaults to TWILIO_PHONE_NUMBER."),
+        method: { type: "string", enum: ["GET", "POST"], description: "Method Twilio uses to fetch url." },
+        record: bool("Record the call. Off by default."),
+        timeout: num("Seconds to let the phone ring."),
+        statusCallback: str("Optional status callback URL."),
       },
-      required: ["name", "fileBase64", "fileName", "contentType"],
+      required: ["to"],
     },
     handler: async (input, ctx) => {
-      const bytes = Buffer.from(input.fileBase64, "base64");
-      const form = new FormData();
-      form.set("type", "file");
-      form.set("name", input.name);
-      if (input.description) form.set("description", input.description);
-      form.set("file", new Blob([bytes], { type: input.contentType }), input.fileName);
+      const credentials = await ctx.credentials();
       const result = await (await ctx.client()).request({
         method: "POST",
-        path: "/v1/knowledgeLearn/file",
-        formData: form,
+        path: `${A}/Calls.json`,
+        body: callBody(input, credentials),
+        signal: ctx.signal,
+      });
+      return result.data;
+    },
+  }),
+  defineTool({
+    name: "twilio_cancel_call",
+    group: "Calls",
+    risk: RISK_APPROVE,
+    description: "Cancel or end an in-progress call by SID.",
+    input: { properties: { call_sid: pathParam("Call SID (CA…)."), status: { type: "string", enum: ["canceled", "completed"], description: "Desired status; default canceled." } }, required: ["call_sid"] },
+    handler: async (input, ctx) => {
+      const result = await (await ctx.client()).request({
+        method: "POST",
+        path: `${A}/Calls/{call_sid}.json`,
+        pathParams: { call_sid: input.call_sid },
+        body: { Status: input.status || "canceled" },
+        signal: ctx.signal,
+      });
+      return result.data;
+    },
+  }),
+  defineTool({
+    name: "twilio_send_sms",
+    group: "Messaging",
+    risk: RISK_APPROVE,
+    description: "Send an SMS from a Twilio number. Trial accounts can text only verified recipient numbers.",
+    input: {
+      properties: {
+        to: str("Destination in E.164 format."),
+        message: str("SMS body (1600 chars max)."),
+        from: str("Optional sender; defaults to TWILIO_PHONE_NUMBER."),
+        statusCallback: str("Optional status callback URL."),
+      },
+      required: ["to", "message"],
+    },
+    handler: async (input, ctx) => {
+      const credentials = await ctx.credentials();
+      const result = await (await ctx.client()).request({
+        method: "POST",
+        path: `${A}/Messages.json`,
+        body: smsBody(input, credentials),
+        signal: ctx.signal,
+      });
+      return result.data;
+    },
+  }),
+  defineTool({
+    name: "twilio_configure_number",
+    group: "Numbers",
+    risk: RISK_APPROVE,
+    description: "Change live voice/SMS webhook routing on a Twilio number. Requires owner approval.",
+    input: { properties: { phone_number_sid: pathParam("Phone number SID (PN…)."), body: obj("Twilio IncomingPhoneNumber update fields, e.g. {VoiceUrl, SmsUrl, FriendlyName}.") }, required: ["phone_number_sid", "body"] },
+    handler: call("POST", `${A}/IncomingPhoneNumbers/{phone_number_sid}.json`, ["phone_number_sid"]),
+  }),
+  defineTool({
+    name: "twilio_purchase_number",
+    group: "Numbers",
+    risk: RISK_APPROVE,
+    description: "Buy a Twilio phone number. This may spend account credit and requires explicit owner approval.",
+    input: {
+      properties: {
+        phone_number: str("Exact number to buy (E.164), or use area_code."),
+        area_code: str("Three-digit area code to search."),
+        country_code: str("Country for area-code search; default US."),
+        number_type: str("local, mobile, or toll-free; default local."),
+        friendly_name: str("Optional label."),
+        voice_url: str("Optional HTTPS webhook for inbound calls."),
+        sms_url: str("Optional HTTPS webhook for inbound SMS."),
+      },
+      required: [],
+    },
+    handler: async (input, ctx) => {
+      if (!input.phone_number && !input.area_code) {
+        throw new Error("Provide phone_number or area_code.");
+      }
+      const body = {};
+      if (input.phone_number) body.PhoneNumber = requireE164(input.phone_number, "phone_number");
+      if (input.area_code) body.AreaCode = String(input.area_code).replace(/\D/g, "");
+      if (input.friendly_name) body.FriendlyName = input.friendly_name;
+      if (input.voice_url) body.VoiceUrl = input.voice_url;
+      if (input.sms_url) body.SmsUrl = input.sms_url;
+      const result = await (await ctx.client()).request({
+        method: "POST",
+        path: `${A}/IncomingPhoneNumbers.json`,
+        body,
         signal: ctx.signal,
       });
       return result.data;
     },
   }),
 
-  // Paid / live actions -------------------------------------------------------
-  defineTool({
-    name: "bland_send_call",
-    group: "Calls",
-    risk: RISK_APPROVE,
-    description:
-      "Place an outbound AI call. Use snake_case Bland v1 /v1/calls fields. Include exactly one route (agent_id + agent_version, persona_id, pathway_id, or task). Verify the destination with the owner before confirming.",
-    input: { properties: { body: obj("Bland POST /v1/calls body, e.g. {phone_number, agent_id, agent_version, from}.") }, required: ["body"] },
-    handler: call("POST", "/v1/calls"),
-  }),
-  defineTool({ name: "bland_stop_call", group: "Calls", risk: RISK_APPROVE, description: "End an active call by ID.", input: { properties: { call_id: pathParam("Call ID.") }, required: ["call_id"] }, handler: call("POST", "/v1/calls/{call_id}/stop", ["call_id"]) }),
-  defineTool({ name: "bland_send_sms", group: "Messaging", risk: RISK_APPROVE, description: "Send an SMS from an agent number. Requires E.164 user_number and agent_number plus agent_message or objective.", input: { properties: { body: obj("Bland POST /v1/sms/send body.") }, required: ["body"] }, handler: call("POST", "/v1/sms/send") }),
-  defineTool({ name: "bland_create_batch", group: "Batches", risk: RISK_APPROVE, description: "Create a batch of calls. Global config must not contain phone_number.", input: { properties: { body: obj("Bland POST /v2/batches body.") }, required: ["body"] }, handler: call("POST", "/v2/batches") }),
-  defineTool({ name: "bland_attach_agent_numbers", group: "Agents", risk: RISK_APPROVE, description: "Route inbound phone numbers to an agent. Replaces existing routing for those numbers.", input: { properties: { agent_id: pathParam("Agent ID."), body: obj("Body with phone numbers/environment.") }, required: ["agent_id", "body"] }, handler: call("POST", "/v2/agents/{agent_id}/inbound/attach", ["agent_id"]) }),
-  defineTool({ name: "bland_promote_agent", group: "Agents", risk: RISK_APPROVE, description: "Promote a version to production. Live routing change.", input: { properties: { agent_id: pathParam("Agent ID."), body: obj("Body with version_id, bump, optional expected_staging_version_id.") }, required: ["agent_id", "body"] }, handler: call("POST", "/v2/agents/{agent_id}/promote", ["agent_id"]) }),
-  defineTool({ name: "bland_purchase_phone_number", group: "Numbers", risk: RISK_APPROVE, description: "Purchase an additional Bland phone number ($15/mo). Owner must explicitly approve the spend.", input: { properties: { body: obj("Body with area_code, country_code, or exact phone_number.") }, required: ["body"] }, handler: call("POST", "/v1/inbound/purchase") }),
-
   // Escape hatch --------------------------------------------------------------
   defineTool({
-    name: "bland_api_request",
+    name: "twilio_api_request",
     group: "Advanced",
     risk: "dynamic",
     description:
-      "Authenticated passthrough to any Bland REST endpoint for full API coverage. Safety tier is derived from method/path; paid, live, and admin calls require confirm:true and explicit owner approval.",
+      "Authenticated passthrough to any Twilio REST endpoint for full API coverage. Safety tier is derived from method/path; paid, live, and admin calls require confirm:true and explicit owner approval.",
     input: {
       properties: {
         method: { type: "string", enum: ["GET", "POST", "PUT", "PATCH", "DELETE"], description: "HTTP method." },
-        path: str("API path beginning with /, e.g. /v2/agents/{agent_id}/promote."),
+        path: str("API path beginning with /, e.g. /2010-04-01/Accounts/{account_sid}/Calls.json."),
         pathParams: obj("Values for {name} placeholders in path."),
         query: obj("Query string parameters."),
-        body: obj("JSON request body."),
+        body: obj("Form-encoded request fields."),
       },
       required: ["method", "path"],
     },
@@ -248,7 +317,7 @@ export function effectiveRisk(tool, input) {
  */
 export async function callTool(name, input = {}, context = {}) {
   const tool = TOOL_BY_NAME.get(name);
-  if (!tool) throw new Error(`Unknown Bland tool: ${name}`);
+  if (!tool) throw new Error(`Unknown Twilio tool: ${name}`);
   const env = context.env || process.env;
   const risk = effectiveRisk(tool, input);
   const check = decide(risk, input, context.safetyOptions || { env });
@@ -271,12 +340,11 @@ export async function callTool(name, input = {}, context = {}) {
     credentials: async () => loadCredentials({ env }),
     client: async () => {
       const creds = await loadCredentials({ env });
-      return new BlandClient({
-        apiKey: creds.apiKey,
-        region: context.region || creds.region,
-        authScheme: context.authScheme || env.BLAND_AUTH_SCHEME,
+      return new TwilioClient({
+        accountSid: creds.accountSid,
+        username: creds.username,
+        password: creds.password,
         fetchImpl: context.fetchImpl,
-        signal: context.signal,
       });
     },
   };
@@ -284,17 +352,29 @@ export async function callTool(name, input = {}, context = {}) {
   return { tool: name, risk, data };
 }
 
-const SETUP_GUIDE = `# agent-phone-number
+const SETUP_GUIDE = `# agent-phone-number (Twilio edition)
 
-Give your coding agent a Bland AI phone number (US/CA calls and SMS) and full Bland REST coverage.
+Give your coding agent a Twilio trial number and Twilio REST tools across OpenCode, Claude Code, and Codex.
 
 ## Safety rules
 
-- The owner signs up and approves the Agent Phone Plan in their own browser. Never ask for payment details or approve the purchase on their behalf.
-- API keys, device codes, and verification codes never belong in chat, source files, URLs, or logs.
-- Calls, SMS, batches, purchases, routing changes, and admin actions require \`confirm: true\` in the tool call. Keep your host's tool approval prompts on.
-- Set \`BLAND_DRY_RUN=1\` to disable every non-read tool. Set \`BLAND_ALLOW_ADMIN=1\` only when the owner explicitly authorized billing/keys/SIP/deletes.
-- Bland's Agent Phone Plan limits: 1 concurrent call, 20 calls/hour, 50 calls/day, 20 texts/hour, 100 texts/day, US/CA only.
+- The owner creates the Twilio account and verifies the recipient number in the Twilio Console. Never ask for credentials, card details, or verification codes in chat.
+- Twilio trial accounts get a free number and $15 credit, but can call/text only **verified numbers**. Never bypass that restriction.
+- Calls, SMS, number purchases, and routing changes require \`confirm: true\` in the tool call. Keep your host's approval prompts on.
+- Set \`TWILIO_DRY_RUN=1\` to disable every non-read tool. Set \`TWILIO_ALLOW_ADMIN=1\` only when the owner explicitly authorized key/delete/admin operations.
+- Verify the destination with the owner before every live action. Use \`twilio_get_call\` afterward to confirm what happened.
+
+## Credentials
+
+Set these in your shell (never in the repo or chat):
+
+\`\`\`bash
+export TWILIO_ACCOUNT_SID=AC...
+export TWILIO_AUTH_TOKEN=...
+export TWILIO_PHONE_NUMBER=+1...
+\`\`\`
+
+Or use an API key: \`TWILIO_API_KEY\` + \`TWILIO_API_SECRET\`. To persist outside the repo, write \`~/.config/agent-phone-number/twilio-credentials.json\` with mode 0600.
 
 ## OpenCode (V2)
 
@@ -307,12 +387,12 @@ Add to \`opencode.jsonc\`:
 }
 \`\`\`
 
-Then run \`bland_status\` in the session. Config changes reload automatically.
+Then run \`twilio_status\` in the session. Tools appear under the \`twilio\` namespace.
 
 ## Claude Code
 
 \`\`\`bash
-claude plugin marketplace add <owner>/agent-phone-number
+claude plugin marketplace add whoselbano-jpg/agent-phone-number
 claude plugin install agent-phone-number
 \`\`\`
 
@@ -323,27 +403,33 @@ Or test locally: \`claude --plugin-dir ./integrations/claude-code\`, then \`/rel
 Add to \`~/.codex/config.toml\`:
 
 \`\`\`toml
-[mcp_servers.bland]
+[mcp_servers.twilio]
 command = "npx"
 args = ["-y", "agent-phone-number-mcp"]
-env_vars = ["BLAND_API_KEY", "BLAND_REGION", "BLAND_CREDENTIALS_FILE"]
+env_vars = ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER", "TWILIO_CREDENTIALS_FILE"]
 default_tools_approval_mode = "prompt"
 
-[mcp_servers.bland.tools.bland_send_call]
+[mcp_servers.twilio.tools.twilio_send_call]
 approval_mode = "approve"
 
-[mcp_servers.bland.tools.bland_api_request]
+[mcp_servers.twilio.tools.twilio_send_sms]
+approval_mode = "approve"
+
+[mcp_servers.twilio.tools.twilio_purchase_number]
+approval_mode = "approve"
+
+[mcp_servers.twilio.tools.twilio_api_request]
 approval_mode = "approve"
 \`\`\`
 
-Run \`codex mcp list\` to verify. Set \`BLAND_DRY_RUN=1\` for a read-only session.
+Run \`codex mcp list\` to verify. Set \`TWILIO_DRY_RUN=1\` for a read-only session.
 
 ## First run
 
-1. \`bland_status\` — check connection.
-2. \`bland_connect_start\` — show the URL and user code to the owner.
-3. \`bland_connect_poll\` — once the owner approves, the key is stored outside the repo.
-4. \`bland_list_voices\`, \`bland_send_call\` — use the number.
+1. \`twilio_status\` — check credentials and number.
+2. \`twilio_list_phone_numbers\` — confirm the caller ID.
+3. \`twilio_send_call\` with \`to\` and \`message\` — one-way call with spoken text, no webhook needed.
+4. \`twilio_get_call\` — verify status and duration.
 
-Docs: https://docs.bland.ai/llms.txt
+Docs: https://www.twilio.com/docs/voice/api/call-resource
 `;

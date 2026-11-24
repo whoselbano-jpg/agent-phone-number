@@ -1,16 +1,17 @@
 const RULES = [
-  { re: /\b(?:sk|org|bland)_[a-z0-9_-]{8,}\b/gi, replace: () => "[REDACTED]" },
+  { re: /\b(?:AC|CA|PN|SK|AP|BY)[a-f0-9]{32}\b/gi, replace: () => "[REDACTED]" },
+  { re: /\b(?:sk|rk_live|pk_live)_[a-z0-9_-]{8,}\b/gi, replace: () => "[REDACTED]" },
   {
     re: /(api[_-]?key\s*[:=]\s*"?)(?:bearer\s+)?([^"\s,}]{6,})/gi,
     replace: (_match, prefix) => `${prefix}[REDACTED]`,
   },
   {
-    re: /(authorization\s*[:=]\s*"?)(?:bearer\s+)?([^"\s,}]{6,})/gi,
-    replace: (_match, prefix) => `${prefix}[REDACTED]`,
+    re: /(auth[_-]?token|api[_-]?secret|password)\s*[:=]\s*"?([^"\s,}]{6,})/gi,
+    replace: (_match, label) => `${label}=[REDACTED]`,
   },
   {
-    re: /(device[_-]?code|user[_-]?code|api[_-]?key)\s*[:=]\s*"?([^"\s,}]{6,})/gi,
-    replace: (_match, label) => `${label}=[REDACTED]`,
+    re: /(authorization\s*[:=]\s*"?)(?:(?:basic|bearer)\s+)?([^"\s,}]{6,})/gi,
+    replace: (_match, prefix) => `${prefix}[REDACTED]`,
   },
 ];
 
@@ -25,7 +26,7 @@ export function redact(text, extraSecrets = []) {
   return out;
 }
 
-/** Non-reversible, short identifier useful for confirming which key is active. */
+/** Non-reversible, short identifier useful for confirming which secret is active. */
 export function fingerprint(secret) {
   if (!secret) return "none";
   let hash = 0;

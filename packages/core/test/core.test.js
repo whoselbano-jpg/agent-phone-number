@@ -1,10 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { classifyRequest, redact, callTool, credentialStatus, SafetyError, connectStart, connectPoll } from "../src/index.js";
+import { classifyRequest, redact, callTool, credentialStatus, SafetyError } from "../src/index.js";
+
+const ACCOUNT_SID = `AC${"a".repeat(32)}`;
+const AUTH_TOKEN = "twilio_test_token_1234567890";
+const FROM = "+14155550100";
+const A = `/2010-04-01/Accounts/${ACCOUNT_SID}`;
 
 function mockFetch(handler) {
   return async (url, init) => {
@@ -18,107 +23,117 @@ function mockFetch(handler) {
   };
 }
 
+function baseEnv(extra = {}) {
+  return {
+    TWILIO_ACCOUNT_SID: ACCOUNT_SID,
+    TWILIO_AUTH_TOKEN: AUTH_TOKEN,
+    TWILIO_PHONE_NUMBER: FROM,
+    TWILIO_CREDENTIALS_FILE: join(tmpdir(), "missing-apn-twilio.json"),
+    ...extra,
+  };
+}
+
 test("classifyRequest applies conservative risk tiers", () => {
-  assert.equal(classifyRequest("POST", "/v1/calls").risk, "approve");
-  assert.equal(classifyRequest("GET", "/v2/agents").risk, "read");
-  assert.equal(classifyRequest("POST", "/billing/cancel_agent_phone").risk, "admin");
-  assert.equal(classifyRequest("DELETE", "/v2/agents/abc").risk, "admin");
-  assert.equal(classifyRequest("PATCH", "/v2/agents/abc").risk, "write");
-  assert.equal(classifyRequest("POST", "/v1/sms/send").risk, "approve");
+  assert.equal(classifyRequest("POST", `${A}/Calls.json`).risk, "approve");
+  assert.equal(classifyRequest("GET", `${A}/Calls.json`).risk, "read");
+  assert.equal(classifyRequest("POST", `${A}/Messages.json`).risk, "approve");
+  assert.equal(classifyRequest("POST", `${A}/IncomingPhoneNumbers.json`).risk, "approve");
+  assert.equal(classifyRequest("POST", `${A}/Keys.json`).risk, "admin");
+  assert.equal(classifyRequest("DELETE", `${A}/Calls/CAaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json`).risk, "admin");
+  assert.equal(classifyRequest("PATCH", `${A}/IncomingPhoneNumbers/PNaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json`).risk, "approve");
 });
 
-test("redact removes keys and auth headers", () => {
-  const text = 'api_key: "org_abcdefgh1234" authorization: Bearer sk_secret12345';
+test("redact removes tokens, keys, and auth headers", () => {
+  const text = `auth_token: "${AUTH_TOKEN}" authorization: Basic sk_secret12345 ${ACCOUNT_SID}`;
   const output = redact(text);
-  assert.ok(!output.includes("org_abcdefgh1234"));
+  assert.ok(!output.includes(AUTH_TOKEN));
   assert.ok(!output.includes("sk_secret12345"));
+  assert.ok(!output.includes(ACCOUNT_SID));
 });
 
 test("paid calls require explicit confirmation", async () => {
-  const env = { BLAND_API_KEY: "org_testkey123", BLAND_CREDENTIALS_FILE: join(tmpdir(), "missing-apn.json") };
   await assert.rejects(
-    () => callTool("bland_send_call", { body: { phone_number: "+14155550100", task: "hi" } }, { env }),
+    () => callTool("twilio_send_call", { to: "+14155550199", message: "hi" }, { env: baseEnv() }),
     (error) => error instanceof SafetyError && /confirm:true/.test(error.message),
   );
 });
 
 test("dry run blocks writes but allows reads", async () => {
-  const env = {
-    BLAND_API_KEY: "org_testkey123",
-    BLAND_CREDENTIALS_FILE: join(tmpdir(), "missing-apn.json"),
-    BLAND_DRY_RUN: "1",
-  };
+  const env = baseEnv({ TWILIO_DRY_RUN: "1" });
   const seen = [];
   const fetchImpl = mockFetch((request) => {
     seen.push(request);
-    return { status: 200, body: { data: [] } };
+    return { status: 200, body: { calls: [] } };
   });
   await assert.rejects(
-    () => callTool("bland_create_agent", { body: { name: "x" }, confirm: true }, { env, fetchImpl }),
-    /BLAND_DRY_RUN/,
+    () => callTool("twilio_send_sms", { to: "+14155550199", message: "hi", confirm: true }, { env, fetchImpl }),
+    /TWILIO_DRY_RUN/,
   );
-  const result = await callTool("bland_list_agents", {}, { env, fetchImpl });
+  const result = await callTool("twilio_list_calls", {}, { env, fetchImpl });
   assert.equal(result.risk, "read");
   assert.equal(seen.length, 1);
 });
 
-test("confirmed call sends raw authorization header and returns data", async () => {
-  const env = { BLAND_API_KEY: "org_testkey123", BLAND_CREDENTIALS_FILE: join(tmpdir(), "missing-apn.json") };
+test("confirmed call sends basic auth, form body, and inline TwiML", async () => {
   let captured;
   const fetchImpl = mockFetch((request) => {
     captured = request;
-    return { status: 200, body: { call_id: "call-1", status: "success" } };
+    return { status: 201, body: { sid: "CAaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", status: "queued" } };
   });
   const result = await callTool(
-    "bland_send_call",
-    { body: { phone_number: "+14155550100", task: "Say hello" }, confirm: true },
-    { env, fetchImpl },
+    "twilio_send_call",
+    { to: "+14155550199", message: 'Hello <world> & "friend"', confirm: true },
+    { env: baseEnv(), fetchImpl },
   );
-  assert.equal(result.data.call_id, "call-1");
-  assert.equal(captured.headers.authorization, "org_testkey123");
+  assert.equal(result.data.sid, "CAaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
   assert.equal(captured.method, "POST");
-  assert.equal(captured.url, "https://api.bland.ai/v1/calls");
-});
-
-test("credential status never exposes the key", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "apn-creds-"));
-  const file = join(dir, "credentials.json");
-  await import("node:fs/promises").then((fs) =>
-    fs.writeFile(file, JSON.stringify({ apiKey: "org_supersecretkey", phoneNumber: "+14155550100" })),
+  assert.equal(captured.url, `https://api.twilio.com${A}/Calls.json`);
+  assert.equal(
+    captured.headers.authorization,
+    `Basic ${Buffer.from(`${ACCOUNT_SID}:${AUTH_TOKEN}`).toString("base64")}`,
   );
-  const status = await credentialStatus({ env: { BLAND_CREDENTIALS_FILE: file } });
+  assert.equal(captured.headers["content-type"], "application/x-www-form-urlencoded");
+  const form = new URLSearchParams(captured.body);
+  assert.equal(form.get("To"), "+14155550199");
+  assert.equal(form.get("From"), FROM);
+  assert.equal(form.get("Twiml"), '<Response><Say>Hello &lt;world&gt; &amp; &quot;friend&quot;</Say></Response>');
+});
+
+test("credential status never exposes the secret or full number", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "apn-twilio-creds-"));
+  const file = join(dir, "twilio-credentials.json");
+  await writeFile(file, JSON.stringify({ accountSid: ACCOUNT_SID, authToken: AUTH_TOKEN, phoneNumber: FROM }));
+  const status = await credentialStatus({ env: { TWILIO_CREDENTIALS_FILE: file } });
   assert.equal(status.connected, true);
-  assert.equal(JSON.stringify(status).includes("org_supersecretkey"), false);
+  assert.equal(JSON.stringify(status).includes(AUTH_TOKEN), false);
   assert.equal(status.phoneNumber, "…0100");
+  const stored = await readFile(file, "utf8");
+  assert.ok(stored.includes(AUTH_TOKEN));
   await rm(dir, { recursive: true, force: true });
 });
 
-test("onboarding stores the approved key and returns only a fingerprint", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "apn-onboard-"));
-  const file = join(dir, "credentials.json");
-  const env = { BLAND_CREDENTIALS_FILE: file };
-  const fetchImpl = mockFetch((request) => {
-    if (request.url.endsWith("/start")) {
-      return {
-        status: 200,
-        body: { device_code: "dev_secret", user_code: "ABCD-1234", verification_url_complete: "https://app.bland.ai/verify", expires_in: 900, interval: 5 },
-      };
-    }
-    return {
-      status: 200,
-      body: { status: "approved", api_key: "org_newsecretkey", org_id: "org-9", phone_number: "+14155550199", plan: "agent-phone-plan" },
-    };
-  });
+test("exactly one voice source is allowed", async () => {
+  const fetchImpl = mockFetch(() => ({ status: 201, body: { sid: "CAtest" } }));
+  await assert.rejects(
+    () =>
+      callTool(
+        "twilio_send_call",
+        { to: "+14155550199", message: "hi", url: "https://example.com/voice.xml", confirm: true },
+        { env: baseEnv(), fetchImpl },
+      ),
+    /exactly one/,
+  );
+});
 
-  const started = await connectStart({ clientName: "test-agent", fetchImpl, credentials: { env } });
-  assert.equal(started.userCode, "ABCD-1234");
-  assert.ok(!JSON.stringify(started).includes("dev_secret"));
-
-  const polled = await connectPoll({ fetchImpl, credentials: { env } });
-  assert.equal(polled.status, "connected");
-  assert.ok(!JSON.stringify(polled).includes("org_newsecretkey"));
-  const stored = JSON.parse(await readFile(file, "utf8"));
-  assert.equal(stored.apiKey, "org_newsecretkey");
-  assert.equal(stored.phoneNumber, "+14155550199");
-  await rm(dir, { recursive: true, force: true });
+test("api passthrough classifies admin paths before sending", async () => {
+  const fetchImpl = mockFetch(() => ({ status: 200, body: {} }));
+  await assert.rejects(
+    () =>
+      callTool(
+        "twilio_api_request",
+        { method: "POST", path: `${A}/Keys.json`, body: { FriendlyName: "x" }, confirm: true },
+        { env: baseEnv(), fetchImpl },
+      ),
+    /TWILIO_ALLOW_ADMIN/,
+  );
 });
