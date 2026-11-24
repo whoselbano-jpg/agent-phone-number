@@ -1,0 +1,27 @@
+{
+  "name": "agent-phone-number-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Give OpenCode, Claude Code, and Codex agents a Bland AI phone number with one install.",
+  "license": "MIT",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node scripts/test.js",
+    "lint": "node scripts/lint.js",
+    "check": "npm run lint && npm test"
+  },
+  "keywords": [
+    "opencode",
+    "claude-code",
+    "codex",
+    "bland-ai",
+    "phone-number",
+    "mcp"
+  ]
+}

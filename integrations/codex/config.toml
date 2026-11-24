@@ -1,0 +1,28 @@
+# Copy this block into ~/.codex/config.toml (or a trusted project .codex/config.toml).
+# Keep BLAND_API_KEY and BLAND_CREDENTIALS_FILE in your shell environment; never commit them.
+
+[mcp_servers.bland]
+command = "npx"
+args = ["-y", "agent-phone-number-mcp@0.1.0"]
+env_vars = ["BLAND_API_KEY", "BLAND_REGION", "BLAND_CREDENTIALS_FILE", "BLAND_AUTH_SCHEME"]
+default_tools_approval_mode = "prompt"
+startup_timeout_sec = 20
+tool_timeout_sec = 90
+
+[mcp_servers.bland.tools.bland_send_call]
+approval_mode = "approve"
+
+[mcp_servers.bland.tools.bland_send_sms]
+approval_mode = "approve"
+
+[mcp_servers.bland.tools.bland_create_batch]
+approval_mode = "approve"
+
+[mcp_servers.bland.tools.bland_purchase_phone_number]
+approval_mode = "approve"
+
+[mcp_servers.bland.tools.bland_api_request]
+approval_mode = "approve"
+
+# Optional: set to "auto" only for a read-only session with BLAND_DRY_RUN=1.
+# approval_policy = "on-request"

@@ -1,0 +1,62 @@
+import { Plugin } from "@opencode/plugin";
+import { TOOLS, callTool, permissionAction, RISK_READ } from "@agent-phone-number/core";
+
+/**
+ * OpenCode V2 server plugin.
+ * Tools are registered as `bland_<name>` via the `bland` namespace.
+ */
+export default Plugin.define({
+  id: "agent-phone-number",
+  async setup(ctx) {
+    await ctx.tool.transform((editor) => {
+      editor.namespace({
+        name: "bland",
+        description:
+          "Bland AI phone number and REST API. Calls/SMS/purchases/admin actions require explicit owner approval and confirm:true.",
+      });
+
+      for (const tool of TOOLS) {
+        const shortName = tool.name.replace(/^bland_/, "");
+        editor.add({
+          name: shortName,
+          description: tool.description,
+          input: tool.input,
+          options: { namespace: "bland", codemode: true },
+          execute: async (input, executionContext) => {
+            const result = await callTool(tool.name, input ?? {}, {
+              env: process.env,
+              signal: executionContext.signal,
+              permission: async ({ risk, action, tool: toolName, input: summary }) => {
+                // Read-only tools skip the host prompt; everything else uses
+                // OpenCode's permission rules (ask/deny/allow) with save support.
+                if (risk === RISK_READ) return;
+                await ctx.permission.assert({
+                  sessionID: executionContext.sessionID,
+                  agent: executionContext.agent,
+                  source: {
+                    type: "tool",
+                    messageID: executionContext.messageID,
+                    id: executionContext.id,
+                  },
+                  action,
+                  resources: [toolName, ...Object.values(summary).map(String)],
+                  save: [permissionAction(risk) === "bland:approve" ? "bland:approve" : action],
+                });
+              },
+            });
+            return {
+              content:
+                typeof result.data === "string"
+                  ? result.data
+                  : JSON.stringify(result.data, null, 2),
+            };
+          },
+        });
+      }
+    });
+
+    return () => {
+      // ctx.tool.transform registration is disposed automatically on unload.
+    };
+  },
+});

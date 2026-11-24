@@ -1,0 +1,8 @@
+{
+  "name": "agent-phone-number",
+  "description": "Give Claude Code a Bland AI phone number and full Bland REST API tools with owner-approval guardrails.",
+  "version": "0.1.0",
+  "author": {
+    "name": "agent-phone-number contributors"
+  }
+}

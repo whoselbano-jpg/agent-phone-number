@@ -1,0 +1,21 @@
+{
+  "name": "agent-phone-number-mcp",
+  "version": "0.1.0",
+  "description": "Stdio MCP bridge exposing Bland AI phone tools to Claude Code, Codex, and other MCP clients.",
+  "type": "module",
+  "bin": {
+    "agent-phone-number-mcp": "src/index.js"
+  },
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": ["src"],
+  "dependencies": {
+    "@agent-phone-number/core": "0.1.0",
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
