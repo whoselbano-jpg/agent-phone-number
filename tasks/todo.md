@@ -8,6 +8,7 @@
 - [x] Task 5: Ran final checks, verified stale Bland references are documentation-only, committed, and pushed to `origin/main`.
 - [x] Task 6: Added mandatory owner onboarding gate: `twilio_onboarding_guide`, `twilio_onboarding_status`, `twilio_onboarding_complete`, live-tool blocking in shared `callTool`, and `npm run onboarding` interactive checklist.
 - [x] Task 7: Ran final tests (10/10), lint (11/11), JSON validation, and adapter doc updates; committed and pushed.
+- [x] Task 8: Corrected stale trial claims ($15 credit, dedicated free number) to current 2026 terms: 30 days, 75 voice minutes, 100 SMS, 5 verified recipients, shared number, custom messages require upgrade.
 
 ## Notes
 

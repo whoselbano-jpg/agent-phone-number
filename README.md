@@ -4,16 +4,22 @@ Give your coding agent a phone number — **without Bland**.
 
 `agent-phone-number` is a small, unofficial plugin/MCP bridge that gives **OpenCode**, **Claude Code**, and **Codex** agents a [Twilio](https://www.twilio.com/) phone number: outbound one-way voice calls, SMS, number management, call logs, and the rest of Twilio's REST API — with one shared safety policy.
 
-> This project is not affiliated with or endorsed by Twilio. Bland was removed in v0.2: its Agent Phone Plan costs $9.99 first month / $19.99 month, and the main free SIP DID programs were discontinued by 2026. Twilio's free trial is the practical free path.
+> This project is not affiliated with or endorsed by Twilio. Bland was removed in v0.2: its Agent Phone Plan costs $9.99 first month / $19.99 month, and the main free SIP DID programs were discontinued by 2026.
 
-## What you actually get for free
+## What is actually free
 
-- A free Twilio trial phone number.
-- $15 trial credit for calls and SMS.
-- One-way AI voice calls using Twilio's built-in text-to-speech — no webhook server needed.
-- **Trial limitation:** you can call/text only numbers verified in the Twilio Console. That is a Twilio anti-abuse rule, not a plugin restriction.
+**The plugin is free (MIT). Phone service is only free for a limited 30-day trial — this is not a permanent free phone line.**
 
-After the trial, Twilio numbers are typically ~$1/month plus per-minute/per-message usage. A fully unrestricted free number with automated AI calling does not currently exist from reputable providers.
+Twilio's current trial (verified November 2026): no credit card, 30 days, **75 voice minutes**, **100 SMS**, up to **5 verified recipients**, calls/texts only within your sign-up country, and a **shared Twilio trial number** that varies by product/recipient and cannot be kept after upgrade.
+
+| Feature | Free trial | After upgrade |
+| --- | --- | --- |
+| `twilio_status`, call/message logs, number search | Yes | Yes |
+| `twilio_send_call` with `message` / inline TwiML | Not reliable — trial call creation is documented as accepting only `To`, a Twilio template webhook URL, and `StatusCallback` | Yes, no webhook needed |
+| `twilio_send_sms` with a custom body | No — trial requires Twilio's pre-defined templates | Yes |
+| Dedicated number you keep | No — shared trial number only | First month free for US Local / US-Canada Toll-free, then ~$1/month + usage |
+
+After 30 days, or when you need custom messages or your own number, you must upgrade with payment details. A permanently free, unrestricted number with automated AI calling does not currently exist from a reputable provider.
 
 ## What you get
 
@@ -73,7 +79,7 @@ default_tools_approval_mode = "prompt"
 The plugin prompts through these steps and **blocks live tools until they are finished**. A human can also run `npm run onboarding` from a checkout for the same checklist.
 
 1. Create a Twilio trial account at <https://www.twilio.com/try-twilio>.
-2. Get a trial number and verify your own recipient number in the Console.
+2. Verify your own recipient number in the Console and note the shared trial number shown in the Try out flow (it varies by product and recipient; it is not a number you own).
 3. Set credentials in your shell (never in chat or a repo file):
 
    ```bash
@@ -87,7 +93,7 @@ The plugin prompts through these steps and **blocks live tools until they are fi
 4. Ask the agent to run `twilio_onboarding_guide` and `twilio_onboarding_status`. It will show exactly which steps are missing.
 5. After the owner confirms the steps, run `twilio_onboarding_complete` with `verifiedRecipient`, `acknowledgeTrialLimits: true`, `acknowledgeCosts: true`, and `confirm: true`. Only the last four digits of the verified number are stored.
 6. Run `twilio_status` and `twilio_list_phone_numbers`.
-7. Run `twilio_send_call` with `to` and `message` to place a one-way call. The agent speaks your message with Twilio text-to-speech; no hosting or webhook is required.
+7. Run `twilio_send_call` with `to` and `message` to place a one-way call. On an **upgraded** account the agent speaks your message with Twilio text-to-speech and no webhook is needed. On a free trial, Twilio's Call API is limited to its template webhook URLs, so use the Console **Try out Voice** flow for test calls until you upgrade.
 8. Run `twilio_get_call` with the returned SID to confirm status, duration, and price.
 
 `twilio_send_call`, `twilio_send_sms`, `twilio_purchase_number`, and `twilio_configure_number` return an actionable error if this checklist is incomplete.
@@ -126,7 +132,7 @@ Full coverage: `twilio_api_request` accepts any `method` + `path` + `pathParams`
 - Bland's own number costs $9.99 first month, then $19.99/month; no free dedicated number.
 - This repo keeps one identical tool contract and safety policy across OpenCode, Claude Code, and Codex.
 - The confirmation gate lives in shared code, not only in host annotations.
-- Outbound one-way calls use Twilio's inline `Twiml` parameter, so there is no server to host for basic usage.
+- Outbound one-way calls use Twilio's inline `Twiml` parameter, so there is no server to host for basic usage on an upgraded account. Free-trial call creation is limited to Twilio's template webhook URLs.
 
 ## Development
 

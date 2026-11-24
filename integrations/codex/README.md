@@ -16,7 +16,7 @@ For a read-only session:
 export TWILIO_DRY_RUN=1
 ```
 
-Twilio trial accounts can call and text only numbers you verified in the Twilio Console. The owner must complete verification; the agent must not ask for verification codes or credentials.
+Twilio trial accounts can call and text only numbers you verified in the Twilio Console. The owner must complete verification; the agent must not ask for verification codes or credentials. The trial lasts 30 days (75 voice minutes, 100 SMS, 5 verified recipients, sign-up country only, shared number); custom SMS bodies and inline-TwiML calls require an upgraded account. Test with the Console **Try out Voice** flow during the trial.
 
 ## Owner onboarding gate
 

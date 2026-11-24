@@ -1,6 +1,6 @@
 # Implementation Plan: Replace Bland with Twilio trial voice/SMS
 
-Source decision: user asked to remove Bland; free SIP DIDs were discontinued at the main providers in 2026, so Twilio's free trial (free number + $15 credit, verified-number calling) is the practical free path.
+Source decision: user asked to remove Bland; free SIP DIDs were discontinued at the main providers in 2026. Twilio's trial was initially assumed to include a free number and $15 credit; task 7 corrects this to the current 30-day, product-specific free units with a shared trial number and restricted custom content.
 
 ## Overview
 Rewrite the shared core and all three adapters from `bland_*` to `twilio_*`, keeping the owner-approval safety tiers. v2 focuses on outbound one-way voice calls using Twilio's inline `Twiml` parameter (no webhook required), SMS, number/call/message reads, paid number purchase, and full REST passthrough.
@@ -20,6 +20,7 @@ Rewrite the shared core and all three adapters from `bland_*` to `twilio_*`, kee
 4. Rewrite README, security notes, publishing notes, env example, and CI/manifests.
 5. Run tests/lint, verify JSON/TOML, commit, push if credentials are available.
 6. Add a mandatory owner onboarding gate so agents prompt for the Twilio account/number/verification/credential steps and cannot use live tools until the owner attests.
+7. Correct trial-cost claims after Twilio replaced the $15 credit with 30-day, product-specific free units and restricted trial call/message parameters.
 
 ## Checkpoints
 - After task 2: `node scripts/test.js` and `node scripts/lint.js` pass.

@@ -155,7 +155,7 @@ export const TOOLS = Object.freeze([
       properties: {
         verifiedRecipient: str("E.164 number the owner verified in the Twilio Console."),
         acknowledgeTrialLimits: bool("Owner confirms trial calls/texts work only to verified numbers."),
-        acknowledgeCosts: bool("Owner confirms usage may cost money after trial credit."),
+        acknowledgeCosts: bool("Owner confirms usage may cost money after the 30-day trial or when free units run out."),
       },
       required: ["verifiedRecipient", "acknowledgeTrialLimits", "acknowledgeCosts"],
     },
@@ -185,7 +185,7 @@ export const TOOLS = Object.freeze([
     group: "Calls",
     risk: RISK_APPROVE,
     description:
-      "Place an outbound one-way voice call. Provide a plain message (spoken with Twilio text-to-speech), raw twiml, or a URL. Verify the destination with the owner before confirming.",
+      "Place an outbound one-way voice call on an upgraded account. Provide a plain message (spoken with Twilio text-to-speech), raw twiml, or a URL. Trial call creation is limited to Twilio's template webhook URLs. Verify the destination with the owner before confirming.",
     input: {
       properties: {
         to: str("Destination in E.164 format, e.g. +14155550100."),
@@ -232,7 +232,7 @@ export const TOOLS = Object.freeze([
     name: "twilio_send_sms",
     group: "Messaging",
     risk: RISK_APPROVE,
-    description: "Send an SMS from a Twilio number. Trial accounts can text only verified recipient numbers.",
+    description: "Send an SMS with a custom body from a Twilio number. Trial accounts require Twilio's pre-defined templates, so custom bodies need an upgraded account.",
     input: {
       properties: {
         to: str("Destination in E.164 format."),
@@ -402,7 +402,7 @@ Give your coding agent a Twilio trial number and Twilio REST tools across OpenCo
 ## Safety rules
 
 - The owner creates the Twilio account and verifies the recipient number in the Twilio Console. Never ask for credentials, card details, or verification codes in chat.
-- Twilio trial accounts get a free number and $15 credit, but can call/text only **verified numbers**. Never bypass that restriction.
+- Twilio's trial is 30 days with 75 voice minutes, 100 SMS, 5 verified recipients, sign-up-country only, and a shared trial number. Custom SMS bodies and inline-TwiML calls require an upgraded account. Never bypass these restrictions.
 - Calls, SMS, number purchases, and routing changes require \`confirm: true\` in the tool call. Keep your host's approval prompts on.
 - Set \`TWILIO_DRY_RUN=1\` to disable every non-read tool. Set \`TWILIO_ALLOW_ADMIN=1\` only when the owner explicitly authorized key/delete/admin operations.
 - Verify the destination with the owner before every live action. Use \`twilio_get_call\` afterward to confirm what happened.
@@ -472,11 +472,11 @@ Run \`codex mcp list\` to verify. Set \`TWILIO_DRY_RUN=1\` for a read-only sessi
 Live tools are blocked until this checklist is complete:
 
 1. The owner creates a Twilio trial account at https://www.twilio.com/try-twilio.
-2. The owner gets a trial number and verifies their own recipient number in the Twilio Console.
+2. The owner verifies their own recipient number in the Twilio Console and notes the shared trial number shown in the Try out flow. A dedicated number requires upgrade.
 3. The owner sets \`TWILIO_ACCOUNT_SID\`, \`TWILIO_AUTH_TOKEN\` (or API key pair), and \`TWILIO_PHONE_NUMBER\` in the shell or a 0600 credentials file.
 4. The agent runs \`twilio_onboarding_guide\` and \`twilio_onboarding_status\`.
 5. After the owner confirms the steps, the agent runs \`twilio_onboarding_complete\` with \`verifiedRecipient\`, \`acknowledgeTrialLimits: true\`, \`acknowledgeCosts: true\`, and \`confirm: true\`.
-6. Run \`twilio_status\` and \`twilio_list_phone_numbers\`, then \`twilio_send_call\` with \`to\` and \`message\` — one-way call with spoken text, no webhook needed.
+6. Run \`twilio_status\` and \`twilio_list_phone_numbers\`. On an upgraded account, \`twilio_send_call\` with \`to\` and \`message\` places a one-way call with no webhook. On a free trial, use the Console **Try out Voice** flow for test calls because Twilio restricts trial call creation to its template webhook URLs.
 7. Run \`twilio_get_call\` — verify status and duration.
 
 A human can also run \`npm run onboarding\` from a checkout for an interactive checklist.

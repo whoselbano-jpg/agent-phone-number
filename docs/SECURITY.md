@@ -35,7 +35,7 @@ Completion is stored in the 0600 credentials file as last-four-digit and boolean
 - Verify the destination number with the owner before `confirm: true`.
 - Use exactly one voice source in `twilio_send_call`: plain `message` (escaped into inline TwiML), raw `twiml`, or a trusted `url`.
 - After a call, record the returned call SID and use `twilio_get_call` to verify what happened. Do not duplicate a call without checking the first one.
-- Trial credit is real money. Keep `TWILIO_DRY_RUN=1` while exploring.
+- A Twilio trial is not a free phone line: it expires after 30 days, includes 75 voice minutes and 100 SMS, allows only 5 verified recipients in the sign-up country, uses a shared trial number, and does not support custom SMS bodies or inline-TwiML calls. Verify the account state before promising a live capability to the owner. Keep `TWILIO_DRY_RUN=1` while exploring.
 
 ## Reporting a vulnerability
 

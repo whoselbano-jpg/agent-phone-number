@@ -96,7 +96,7 @@ export async function credentialStatus({ env = process.env } = {}) {
     phoneNumber: maskPhone(value.phoneNumber),
     credentialsFile: value.file,
     trialNotice:
-      "Twilio trial numbers can call and text only numbers verified in the Twilio Console; calls use trial credit.",
+      "Twilio trial: 30 days, 75 voice minutes, 100 SMS, 5 verified recipients, sign-up country only, shared trial number. Custom SMS bodies and inline-TwiML calls require an upgraded account.",
     warning:
       value.source === "environment"
         ? "Credentials came from environment variables; they will not persist across processes unless saved to the credentials file."

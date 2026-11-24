@@ -15,8 +15,8 @@ const STEPS = [
   },
   {
     id: "number",
-    title: "Get a trial phone number",
-    detail: "In the Twilio Console, get a trial number. This becomes the agent's caller ID and SMS sender.",
+    title: "Note the shared trial number",
+    detail: "Trial accounts use a shared Twilio-owned number shown in the Console Try out flow. It varies by product/recipient and cannot be kept after upgrade; a dedicated number requires a paid account.",
   },
   {
     id: "verifiedRecipient",
@@ -28,12 +28,12 @@ const STEPS = [
     id: "trialLimits",
     title: "Acknowledge trial limits and costs",
     detail:
-      "The owner acknowledges that trial usage is limited to verified numbers and that calls/SMS may cost money after trial credit.",
+      "The owner acknowledges the 30-day expiry, 75 voice minutes/100 SMS, 5 verified recipients, sign-up-country restriction, shared number, paid-upgrade requirement, and that custom SMS bodies and inline-TwiML calls need an upgraded account.",
   },
   {
     id: "firstRun",
     title: "Confirm the bridge works",
-    detail: "Run twilio_status and twilio_list_phone_numbers, then place one test call with twilio_send_call.",
+    detail: "Run twilio_status and twilio_list_phone_numbers. Use the Console Try out Voice flow for trial test calls; custom-message calls via twilio_send_call require an upgraded account.",
   },
 ];
 
@@ -121,7 +121,7 @@ export function onboardingGuide() {
   return {
     title: "Twilio phone setup — owner checklist",
     warning:
-      "Do not use live tools until every step is confirmed. Trial accounts can call/text only verified numbers.",
+      "Do not use live tools until every step is confirmed. Twilio trials expire after 30 days, use a shared number, allow 5 verified recipients in the sign-up country only, and do not support custom SMS bodies or inline-TwiML calls.",
     steps: STEPS,
     tools: {
       status: "twilio_onboarding_status",

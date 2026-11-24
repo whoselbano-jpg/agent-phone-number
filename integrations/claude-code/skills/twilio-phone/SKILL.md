@@ -14,6 +14,7 @@ The `twilio` MCP server exposes `twilio_status`, `twilio_setup_guide`, onboardin
 - **Live tools are blocked until owner onboarding is complete.** Walk the owner through the checklist, then attest with `twilio_onboarding_complete`. Do not guess or self-certify any step.
 - Calls, SMS, number purchases, and routing changes require `confirm: true` **and** Claude's tool approval. Keep approval prompts enabled.
 - Use `TWILIO_DRY_RUN=1` for read-only exploration. Use `TWILIO_ALLOW_ADMIN=1` only for explicitly authorized key/delete/admin operations.
+- **Free trial reality:** 30 days, 75 voice minutes, 100 SMS, 5 verified recipients, sign-up country only, shared trial number. Custom SMS bodies and inline-TwiML calls require an upgraded account. Use the Console **Try out Voice** flow for trial test calls; never promise permanent free calling.
 
 ## First run — owner onboarding gate
 
